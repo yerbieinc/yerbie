@@ -1,5 +1,9 @@
 # Yerbie
 Job queue and scheduler
 
-## Installation Instructions
-1. Install JAVA and set $JAVA_HOME
+## Deploy Instructions
+Install Docker, then, in this directory run `docker build .`
+
+
+## Local Development
+In IntelliJ IDEA CE -> Open as Project -> build.gradle
