@@ -1,8 +1,23 @@
 package com.yerbie;
 
-public class YerbieApplication {
+import com.yerbie.health.YerbieHealthCheck;
+import io.dropwizard.Application;
+import io.dropwizard.setup.Bootstrap;
+import io.dropwizard.setup.Environment;
 
-    public static void main(String[] args) {
-        System.out.println("Hello World!");
+public class YerbieApplication extends Application<YerbieConfiguration> {
+
+    public static void main(String[] args) throws Exception {
+        new YerbieApplication().run(args);
+    }
+
+    @Override
+    public void initialize(Bootstrap<YerbieConfiguration> bootstrap) {
+
+    }
+
+    @Override
+    public void run(YerbieConfiguration configuration, Environment environment) {
+        environment.healthChecks().register("default", new YerbieHealthCheck());
     }
 }
