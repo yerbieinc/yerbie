@@ -6,5 +6,5 @@ RUN gradle build --no-daemon
 
 FROM openjdk:12-alpine
 EXPOSE 9412
-COPY --from=builder /home/gradle/src/build/libs/*.jar /app/yerie-server.jar
-ENTRYPOINT ["java", "-jar", "/app/yerbie-server.jar"]
+COPY --from=builder /home/gradle/src/build/libs/*-all.jar /app/yerie-server.jar
+ENTRYPOINT ["java", "-jar", "/app/yerbie-server.jar", "server", "yerbie.yml"]
