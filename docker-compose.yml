@@ -1,0 +1,15 @@
+version: '3.3'
+services:
+  web:
+    build: .
+    ports:
+      - "5865:5865"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+        
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
