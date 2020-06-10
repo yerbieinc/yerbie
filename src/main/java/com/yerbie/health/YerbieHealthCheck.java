@@ -5,15 +5,15 @@ import redis.clients.jedis.Jedis;
 
 public class YerbieHealthCheck extends HealthCheck {
 
-    private final Jedis jedis;
+  private final Jedis jedis;
 
-    public YerbieHealthCheck(Jedis jedis) {
-        this.jedis = jedis;
-    }
+  public YerbieHealthCheck(Jedis jedis) {
+    this.jedis = jedis;
+  }
 
-    @Override
-    protected Result check() throws Exception {
-        jedis.ping();
-        return Result.healthy();
-    }
+  @Override
+  protected Result check() throws Exception {
+    jedis.ping();
+    return Result.healthy();
+  }
 }

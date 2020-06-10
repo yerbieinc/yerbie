@@ -2,7 +2,12 @@ plugins {
     id 'java'
     id 'application'
     id 'idea'
+
+    // For building a fat jar
     id 'com.github.johnrengelman.shadow' version '5.2.0'
+
+    // For automatic syntax formatting
+    id "com.diffplug.gradle.spotless" version "4.3.0"
 }
 
 group 'org.yerbie'
@@ -29,6 +34,12 @@ shadowJar {
     mergeServiceFiles()
     exclude 'META-INF/*.DSA'
     exclude 'META-INF/*.RSA'
+}
+
+spotless {
+    java {
+        googleJavaFormat()
+    }
 }
 
 mainClassName = 'com.yerbie.YerbieApplication'

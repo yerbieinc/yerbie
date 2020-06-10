@@ -4,17 +4,17 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class EndpointConfiguration {
 
-    @JsonProperty("host")
-    String host;
+  @JsonProperty("host")
+  String host;
 
-    @JsonProperty("port")
-    Integer port;
+  @JsonProperty("port")
+  Integer port;
 
-    public String getHost() {
-        return host;
-    }
+  public String getHost() {
+    return host;
+  }
 
-    public Integer getPort() {
-        return port;
-    }
+  public Integer getPort() {
+    return port;
+  }
 }

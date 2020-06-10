@@ -8,17 +8,22 @@ import redis.clients.jedis.Jedis;
 
 public class YerbieApplication extends Application<YerbieConfiguration> {
 
-    public static void main(String[] args) throws Exception {
-        new YerbieApplication().run(args);
-    }
+  public static void main(String[] args) throws Exception {
+    new YerbieApplication().run(args);
+  }
 
-    @Override
-    public void initialize(Bootstrap<YerbieConfiguration> bootstrap) {
+  @Override
+  public void initialize(Bootstrap<YerbieConfiguration> bootstrap) {}
 
-    }
-
-    @Override
-    public void run(YerbieConfiguration configuration, Environment environment) {
-        environment.healthChecks().register("redis", new YerbieHealthCheck(new Jedis(configuration.redisConfiguration.getHost(), configuration.redisConfiguration.getPort())));
-    }
+  @Override
+  public void run(YerbieConfiguration configuration, Environment environment) {
+    environment
+        .healthChecks()
+        .register(
+            "redis",
+            new YerbieHealthCheck(
+                new Jedis(
+                    configuration.redisConfiguration.getHost(),
+                    configuration.redisConfiguration.getPort())));
+  }
 }
