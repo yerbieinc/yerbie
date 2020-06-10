@@ -10,9 +10,10 @@ In IntelliJ IDEA CE -> Open as Project -> build.gradle
 3. `curl localhost:5865/admin/healthcheck` to run healthchecks and verify everything is working.
 
 ## Connecting to the Redis Container via Redis CLI
-1. Run `docker-compose up`
-2. Run `docker ps` to find the id of the redis container.
-3. Run `docker exec -it <container id> redis-cli -h redis` to connect to redis via the redis cli.
+1. Run `docker-compose build`.
+2. Run `docker-compose up`
+3. Run `docker ps` to find the id of the redis container.
+4. Run `docker exec -it <container id> redis-cli -h redis` to connect to redis via the redis cli.
 
 
 ## Building the Yerbie Image and Running it

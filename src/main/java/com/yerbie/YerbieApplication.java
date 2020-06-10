@@ -4,6 +4,7 @@ import com.yerbie.health.YerbieHealthCheck;
 import io.dropwizard.Application;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
+import redis.clients.jedis.Jedis;
 
 public class YerbieApplication extends Application<YerbieConfiguration> {
 
@@ -18,6 +19,6 @@ public class YerbieApplication extends Application<YerbieConfiguration> {
 
     @Override
     public void run(YerbieConfiguration configuration, Environment environment) {
-        environment.healthChecks().register("default", new YerbieHealthCheck());
+        environment.healthChecks().register("redis", new YerbieHealthCheck(new Jedis(configuration.redisConfiguration.getHost(), configuration.redisConfiguration.getPort())));
     }
 }

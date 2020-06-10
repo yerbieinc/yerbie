@@ -1,5 +1,10 @@
+# TODO(claudio.wilson): Allow https here.
 server:
   type: simple
   connector:
     type: http
     port: 5865
+
+redis:
+  host: redis
+  port: 6379
