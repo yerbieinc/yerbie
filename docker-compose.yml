@@ -11,5 +11,6 @@ services:
   # TODO(claudio.wilson): Pin this to a specific image  
   redis:
     image: redis:alpine
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "6379:6379"
