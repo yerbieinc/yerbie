@@ -1,6 +1,7 @@
 package com.yerbie;
 
 import com.yerbie.health.YerbieHealthCheck;
+import com.yerbie.resources.JobResource;
 import io.dropwizard.Application;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
@@ -25,5 +26,6 @@ public class YerbieApplication extends Application<YerbieConfiguration> {
                 new Jedis(
                     configuration.redisConfiguration.getHost(),
                     configuration.redisConfiguration.getPort())));
+    environment.jersey().register(new JobResource());
   }
 }
