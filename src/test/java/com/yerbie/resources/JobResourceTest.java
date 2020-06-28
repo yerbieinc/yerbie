@@ -27,7 +27,7 @@ public class JobResourceTest extends TestCase {
   public void testScheduleJob() {
     when(jobManager.createJob(100, "jobData")).thenReturn("testToken");
 
-    ScheduleJobRequest scheduleJobRequest = new ScheduleJobRequest("jobData", 100);
+    ScheduleJobRequest scheduleJobRequest = new ScheduleJobRequest(100, "jobData");
     ScheduleJobResponse jobResponse = jobResource.scheduleJob(scheduleJobRequest);
     assertEquals("testToken", jobResponse.getJobToken());
   }
