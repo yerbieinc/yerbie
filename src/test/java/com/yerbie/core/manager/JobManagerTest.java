@@ -2,6 +2,7 @@ package com.yerbie.core.manager;
 
 import static org.mockito.Mockito.*;
 
+import com.yerbie.core.JobManager;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -24,18 +25,18 @@ public class JobManagerTest {
 
   @Test
   public void testCreateJob() {
-    jobManager.createJob(1000, "jobData");
+    jobManager.createJob(1000, "jobData", "normal");
     verify(mockJedis).multi();
-    verify(mockTransaction).zadd(eq("jobs"), eq(1000.0), anyString(), any());
+    verify(mockTransaction).zadd(eq("queue_normal"), eq(1000.0), anyString(), any());
     verify(mockTransaction).set(anyString(), eq("jobData"));
     verify(mockTransaction).exec();
   }
 
   @Test
   public void testDeleteJob() {
-    jobManager.deleteJob("jobToken");
+    jobManager.deleteJob("jobToken", "normal");
     verify(mockJedis).multi();
-    verify(mockTransaction).zrem("jobs", "jobToken");
+    verify(mockTransaction).zrem("queue_normal", "jobToken");
     verify(mockTransaction).del("jobToken");
     verify(mockTransaction).exec();
   }

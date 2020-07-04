@@ -6,12 +6,16 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public class ScheduleJobRequest {
   private final long delaySeconds;
   private final String jobData;
+  private final String queue;
 
   @JsonCreator
   public ScheduleJobRequest(
-      @JsonProperty("delaySeconds") long delaySeconds, @JsonProperty("jobData") String jobData) {
+      @JsonProperty("delaySeconds") long delaySeconds,
+      @JsonProperty("jobData") String jobData,
+      @JsonProperty("queue") String queue) {
     this.jobData = jobData;
     this.delaySeconds = delaySeconds;
+    this.queue = queue;
   }
 
   @JsonProperty
@@ -24,6 +28,11 @@ public class ScheduleJobRequest {
     return delaySeconds;
   }
 
+  @JsonProperty
+  public String getQueue() {
+    return queue;
+  }
+
   @Override
   public boolean equals(Object other) {
     if (other == this) return true;
@@ -31,11 +40,9 @@ public class ScheduleJobRequest {
 
     ScheduleJobRequest otherScheduleJobRequest = (ScheduleJobRequest) other;
 
-    if (this.delaySeconds != otherScheduleJobRequest.delaySeconds) {
-      return false;
-    }
-
-    return this.jobData.equals(otherScheduleJobRequest.jobData);
+    return this.delaySeconds == otherScheduleJobRequest.delaySeconds
+        && this.jobData.equals(otherScheduleJobRequest.jobData)
+        && this.queue.equals(otherScheduleJobRequest.queue);
   }
 
   @Override

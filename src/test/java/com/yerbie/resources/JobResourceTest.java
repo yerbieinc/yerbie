@@ -4,7 +4,7 @@ import static org.mockito.Mockito.when;
 
 import com.yerbie.api.ScheduleJobRequest;
 import com.yerbie.api.ScheduleJobResponse;
-import com.yerbie.core.manager.JobManager;
+import com.yerbie.core.JobManager;
 import junit.framework.TestCase;
 import org.junit.Before;
 import org.junit.Test;
@@ -25,9 +25,9 @@ public class JobResourceTest extends TestCase {
 
   @Test
   public void testScheduleJob() {
-    when(jobManager.createJob(100, "jobData")).thenReturn("testToken");
+    when(jobManager.createJob(100, "jobData", "jobQueue")).thenReturn("testToken");
 
-    ScheduleJobRequest scheduleJobRequest = new ScheduleJobRequest(100, "jobData");
+    ScheduleJobRequest scheduleJobRequest = new ScheduleJobRequest(100, "jobData", "jobQueue");
     ScheduleJobResponse jobResponse = jobResource.scheduleJob(scheduleJobRequest);
     assertEquals("testToken", jobResponse.getJobToken());
   }

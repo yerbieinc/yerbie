@@ -1,6 +1,6 @@
 package com.yerbie;
 
-import com.yerbie.core.manager.JobManager;
+import com.yerbie.core.JobManager;
 import com.yerbie.health.YerbieHealthCheck;
 import com.yerbie.resources.JobResource;
 import io.dropwizard.Application;
