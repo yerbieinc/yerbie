@@ -75,37 +75,46 @@ public class JobManager {
   }
 
   /**
-   * Reserves a job by removing it from the ready jobs set and into the processing jobs set.
+   * Reserves a job by removing it from the ready jobs set and into the processing jobs set. TODO we
+   * should also return the error message here so we can propagate it down to the client for easier
+   * debugging.
    *
    * @param queue
    */
   public Optional<JobData> reserveJob(String queue) {
     if (!jedis.exists(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue))) {
-      LOGGER.debug("Attempting to reserve job from queue {}", queue);
       return Optional.empty();
     }
 
-    jedis.watch(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
-    String response = jedis.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
+    LOGGER.debug("Attempting to reserve job from queue {}", queue);
 
-    if (response == null) {
+    jedis.watch(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
+
+    Optional<String> serializedJobOptional =
+        jedis.lrange(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue), 0, 0).stream()
+            .findFirst();
+
+    if (!serializedJobOptional.isPresent()) {
       jedis.unwatch();
       LOGGER.debug("No jobs in ready job queue {}", queue);
       return Optional.empty();
     }
 
     Transaction transaction = jedis.multi();
+    String serializedJob = serializedJobOptional.get();
 
     try {
-      JobData jobData = jobSerializer.deserializeJob(response);
+      JobData jobData = jobSerializer.deserializeJob(serializedJob);
 
-      transaction.sadd(String.format(REDIS_RUNNING_JOBS_FORMAT_STRING, queue), response);
+      transaction.rpush(String.format(REDIS_RUNNING_JOBS_FORMAT_STRING, queue), serializedJob);
+      transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
       transaction.exec();
 
       LOGGER.debug("Removed job {} from ready job queue {}", jobData.getJobToken(), queue);
       return Optional.of(jobData);
     } catch (IOException ex) {
-      LOGGER.error("Failed to deserialize jobData {}", response, ex);
+      LOGGER.error("Failed to deserialize jobData {}, removing bad job data.", serializedJob, ex);
+      transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
       transaction.exec();
       return Optional.empty();
     }

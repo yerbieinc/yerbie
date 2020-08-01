@@ -3,19 +3,21 @@ package com.yerbie.core.manager;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.*;
 
+import com.google.common.collect.ImmutableList;
 import com.yerbie.core.JobManager;
 import com.yerbie.core.job.JobData;
 import com.yerbie.core.job.JobSerializer;
 import com.yerbie.stub.StubData;
+import java.io.IOException;
 import java.time.Clock;
 import java.time.ZoneId;
+import java.util.Optional;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.Response;
 import redis.clients.jedis.Transaction;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -23,7 +25,6 @@ public class JobManagerTest {
   @Mock Jedis mockJedis;
   @Mock Transaction mockTransaction;
   @Mock JobSerializer mockJobSerializer;
-  @Mock Response<String> mockResponse;
   JobManager jobManager;
 
   @Before
@@ -56,19 +57,39 @@ public class JobManagerTest {
 
   @Test
   public void testReserveJobWhenAvailable() throws Exception {
-    when(mockResponse.get()).thenReturn("JOB_DATA");
+    when(mockJedis.exists("ready_jobs_queue")).thenReturn(true);
     JobData expectedJobData = new JobData("payload", 1, "queue", "jobToken");
 
-    when(mockTransaction.lpop("ready_jobs_queue")).thenReturn(mockResponse);
+    when(mockJedis.lrange("ready_jobs_queue", 0, 0)).thenReturn(ImmutableList.of("JOB_DATA"));
     when(mockJobSerializer.deserializeJob("JOB_DATA")).thenReturn(expectedJobData);
 
     assertEquals(expectedJobData, jobManager.reserveJob("queue").get());
 
     verify(mockJedis).multi();
     verify(mockTransaction).lpop("ready_jobs_queue");
-    verify(mockTransaction).sadd("running_jobs_queue", "JOB_DATA");
+    verify(mockTransaction).rpush("running_jobs_queue", "JOB_DATA");
     verify(mockTransaction).exec();
   }
 
-  // TODO add tests to validate no job and unable to deserialize reserve job.
+  @Test
+  public void testReserveJobQueueNotExisting() throws Exception {
+    when(mockJedis.exists("ready_jobs_queue")).thenReturn(false);
+
+    assertEquals(Optional.empty(), jobManager.reserveJob("queue"));
+  }
+
+  @Test
+  public void testReserveJobDeserializable() throws Exception {
+    when(mockJedis.exists("ready_jobs_queue")).thenReturn(true);
+
+    when(mockJedis.lrange("ready_jobs_queue", 0, 0)).thenReturn(ImmutableList.of("JOB_DATA"));
+
+    when(mockJobSerializer.deserializeJob("JOB_DATA")).thenThrow(new IOException("derp!"));
+
+    assertEquals(Optional.empty(), jobManager.reserveJob("queue"));
+
+    verify(mockJedis).multi();
+    verify(mockTransaction).lpop("ready_jobs_queue");
+    verify(mockTransaction).exec();
+  }
 }
