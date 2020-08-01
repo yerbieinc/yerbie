@@ -1,15 +1,11 @@
 package com.yerbie.resources;
 
 import com.codahale.metrics.annotation.Timed;
-import com.yerbie.api.ReserveJobRequest;
 import com.yerbie.api.ReserveJobResponse;
 import com.yerbie.api.ScheduleJobRequest;
 import com.yerbie.api.ScheduleJobResponse;
 import com.yerbie.core.JobManager;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 
 @Path("/jobs")
@@ -25,7 +21,7 @@ public class JobResource {
   }
 
   @POST
-  @Path("schedule")
+  @Path("/schedule")
   @Timed
   public ScheduleJobResponse scheduleJob(ScheduleJobRequest scheduleJobRequest) {
     return new ScheduleJobResponse(
@@ -36,11 +32,11 @@ public class JobResource {
   }
 
   @GET
-  @Path("reserve")
+  @Path("/reserve")
   @Timed
-  public ReserveJobResponse reserveJob(ReserveJobRequest reserveJobRequest) {
+  public ReserveJobResponse reserveJob(@QueryParam("queue") String jobQueue) {
     return jobManager
-        .reserveJob(reserveJobRequest.getQueue())
+        .reserveJob(jobQueue)
         .map(
             jobData ->
                 new ReserveJobResponse(

@@ -80,17 +80,21 @@ public class JobManager {
    * @param queue
    */
   public Optional<JobData> reserveJob(String queue) {
-    Transaction transaction = jedis.multi();
+    if (!jedis.exists(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue))) {
+      LOGGER.debug("Attempting to reserve job from queue {}", queue);
+      return Optional.empty();
+    }
 
-    LOGGER.debug("Attempting to reserve job from queue {}", queue);
-
-    String response = transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue)).get();
+    jedis.watch(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
+    String response = jedis.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
 
     if (response == null) {
-      transaction.exec();
+      jedis.unwatch();
       LOGGER.debug("No jobs in ready job queue {}", queue);
       return Optional.empty();
     }
+
+    Transaction transaction = jedis.multi();
 
     try {
       JobData jobData = jobSerializer.deserializeJob(response);

@@ -2,7 +2,6 @@ package com.yerbie.resources;
 
 import static org.mockito.Mockito.when;
 
-import com.yerbie.api.ReserveJobRequest;
 import com.yerbie.api.ReserveJobResponse;
 import com.yerbie.api.ScheduleJobRequest;
 import com.yerbie.api.ScheduleJobResponse;
@@ -46,7 +45,6 @@ public class JobResourceTest extends TestCase {
             StubData.SAMPLE_JOB_DATA.getJobToken());
     when(jobManager.reserveJob("queue")).thenReturn(Optional.of(StubData.SAMPLE_JOB_DATA));
 
-    assertEquals(
-        expectedReserveJobResponse, jobResource.reserveJob(new ReserveJobRequest("queue")));
+    assertEquals(expectedReserveJobResponse, jobResource.reserveJob("queue"));
   }
 }
