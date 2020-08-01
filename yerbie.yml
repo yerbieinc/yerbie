@@ -5,6 +5,9 @@ server:
     type: http
     port: 5865
 
+logging:
+  level: DEBUG
+
 redis:
   host: redis
   port: 6379

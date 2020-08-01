@@ -1,11 +1,14 @@
 package com.yerbie;
 
 import com.yerbie.core.JobManager;
+import com.yerbie.core.job.JobSerializer;
 import com.yerbie.health.YerbieHealthCheck;
 import com.yerbie.resources.JobResource;
 import io.dropwizard.Application;
+import io.dropwizard.jackson.Jackson;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
+import java.time.Clock;
 import redis.clients.jedis.Jedis;
 
 public class YerbieApplication extends Application<YerbieConfiguration> {
@@ -22,7 +25,10 @@ public class YerbieApplication extends Application<YerbieConfiguration> {
     Jedis jedis =
         new Jedis(
             configuration.redisConfiguration.getHost(), configuration.redisConfiguration.getPort());
+    JobSerializer jobSerializer = new JobSerializer(Jackson.newObjectMapper());
     environment.healthChecks().register("redis", new YerbieHealthCheck(jedis));
-    environment.jersey().register(new JobResource(new JobManager(jedis)));
+    environment
+        .jersey()
+        .register(new JobResource(new JobManager(jedis, jobSerializer, Clock.systemUTC())));
   }
 }
