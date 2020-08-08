@@ -75,8 +75,7 @@ public class JobManager {
   }
 
   /**
-   * Reserves a job by removing it from the ready jobs set and into the processing jobs set. TODO we
-   * should also return the error message here so we can propagate it down to the client for easier
+   * Reserves a job by removing it from the ready jobs set and into the processing jobs set.
    * debugging.
    *
    * @param queue

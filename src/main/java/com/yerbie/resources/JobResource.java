@@ -31,7 +31,7 @@ public class JobResource {
             scheduleJobRequest.getQueue()));
   }
 
-  @GET
+  @POST
   @Path("/reserve")
   @Timed
   public ReserveJobResponse reserveJob(@QueryParam("queue") String jobQueue) {

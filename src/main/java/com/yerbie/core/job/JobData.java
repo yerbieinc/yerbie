@@ -46,11 +46,12 @@ public class JobData {
     if (other == this) return true;
     if (!(other instanceof JobData)) return false;
 
-    JobData otherScheduleJobRequest = (JobData) other;
+    JobData otherJobData = (JobData) other;
 
-    return this.delaySeconds == otherScheduleJobRequest.delaySeconds
-        && this.jobPayload.equals(otherScheduleJobRequest.jobPayload)
-        && this.queue.equals(otherScheduleJobRequest.queue);
+    return this.delaySeconds == otherJobData.delaySeconds
+        && this.jobPayload.equals(otherJobData.jobPayload)
+        && this.queue.equals(otherJobData.queue)
+        && this.jobToken.equals(otherJobData.jobToken);
   }
 
   @Override
