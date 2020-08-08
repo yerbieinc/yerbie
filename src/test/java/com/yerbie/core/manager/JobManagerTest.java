@@ -67,7 +67,7 @@ public class JobManagerTest {
 
     verify(mockJedis).multi();
     verify(mockTransaction).lpop("ready_jobs_queue");
-    verify(mockTransaction).rpush("running_jobs_queue", "JOB_DATA");
+    verify(mockTransaction).zadd(eq("running_jobs"), eq(1596318740.0), eq("JOB_DATA"), any());
     verify(mockTransaction).exec();
   }
 

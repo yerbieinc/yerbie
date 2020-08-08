@@ -18,7 +18,7 @@ public class JobManager {
   private static final String REDIS_DELAYED_JOBS_SORTED_SET = "delayed_jobs";
   private static final String REDIS_JOB_DATA_SORTED_SET = "job_data";
   private static final String REDIS_READY_JOBS_FORMAT_STRING = "ready_jobs_%s";
-  private static final String REDIS_RUNNING_JOBS_FORMAT_STRING = "running_jobs_%s";
+  private static final String REDIS_RUNNING_JOBS_SORTED_SET = "running_jobs";
 
   private final Jedis jedis;
   private final JobSerializer jobSerializer;
@@ -105,7 +105,11 @@ public class JobManager {
     try {
       JobData jobData = jobSerializer.deserializeJob(serializedJob);
 
-      transaction.rpush(String.format(REDIS_RUNNING_JOBS_FORMAT_STRING, queue), serializedJob);
+      transaction.zadd(
+          REDIS_RUNNING_JOBS_SORTED_SET,
+          Instant.now(clock).getEpochSecond(),
+          serializedJob,
+          ZAddParams.zAddParams().nx());
       transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
       transaction.exec();
 
