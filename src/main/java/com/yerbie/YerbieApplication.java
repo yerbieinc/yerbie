@@ -1,6 +1,7 @@
 package com.yerbie;
 
 import com.yerbie.core.JobManager;
+import com.yerbie.core.Scheduler;
 import com.yerbie.core.job.JobSerializer;
 import com.yerbie.health.YerbieHealthCheck;
 import com.yerbie.resources.JobResource;
@@ -27,8 +28,8 @@ public class YerbieApplication extends Application<YerbieConfiguration> {
             configuration.redisConfiguration.getHost(), configuration.redisConfiguration.getPort());
     JobSerializer jobSerializer = new JobSerializer(Jackson.newObjectMapper());
     environment.healthChecks().register("redis", new YerbieHealthCheck(jedis));
-    environment
-        .jersey()
-        .register(new JobResource(new JobManager(jedis, jobSerializer, Clock.systemUTC())));
+    JobManager jobManager = new JobManager(jedis, jobSerializer, Clock.systemUTC());
+    environment.jersey().register(new JobResource(jobManager));
+    environment.lifecycle().manage(new Scheduler(jobManager, Clock.systemUTC()));
   }
 }

@@ -1,11 +1,13 @@
 package com.yerbie.core;
 
+import com.yerbie.core.exception.SerializationException;
 import com.yerbie.core.job.JobData;
 import com.yerbie.core.job.JobSerializer;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,14 +48,16 @@ public class JobManager {
         delaySeconds,
         queue);
 
-    Transaction transaction = jedis.multi();
-    transaction.zadd(
-        REDIS_DELAYED_JOBS_SORTED_SET,
-        Instant.now(clock).plusSeconds(delaySeconds).getEpochSecond(),
-        jobToken,
-        ZAddParams.zAddParams().nx());
-    transaction.sadd(REDIS_JOB_DATA_SORTED_SET, jobToken, jobPayload);
-    transaction.exec();
+    try {
+      jedis.zadd(
+          REDIS_DELAYED_JOBS_SORTED_SET,
+          Instant.now(clock).plusSeconds(delaySeconds).getEpochSecond(),
+          jobSerializer.serializeJob(new JobData(jobPayload, delaySeconds, queue, jobToken)),
+          ZAddParams.zAddParams().nx());
+    } catch (IOException ex) {
+      LOGGER.error("Unable to serialize job into jobData.", ex);
+      throw new SerializationException();
+    }
 
     LOGGER.debug(
         "Added JobToken {} with delaySeconds {} into queue {}", jobToken, delaySeconds, queue);
@@ -120,6 +124,46 @@ public class JobManager {
       transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
       transaction.exec();
       return Optional.empty();
+    }
+  }
+
+  /**
+   * Scans for jobs that are ready to run and enqueues them into the appropriate queue. This should
+   * only be called by the master scheduler process, and not multiple processes, otherwise this may
+   * result in jobs being enqueued twice. Do not call this method without having the parent
+   * scheduler lock.
+   *
+   * @return whether a job was processed or not.
+   */
+  public boolean handleDueJobsToBeProcessed(long epochSecondsMax) {
+    Set<String> applicableJobs =
+        jedis.zrangeByScore(REDIS_DELAYED_JOBS_SORTED_SET, 0, epochSecondsMax, 0, 1);
+
+    if (applicableJobs.isEmpty()) {
+      return false;
+    }
+
+    String serializedJobData = applicableJobs.stream().findFirst().get();
+    Transaction transaction = jedis.multi();
+
+    try {
+      JobData jobData = jobSerializer.deserializeJob(serializedJobData);
+
+      LOGGER.info(
+          "Moving job with token {} into queue {}", jobData.getJobToken(), jobData.getQueue());
+
+      transaction.rpush(
+          String.format(REDIS_READY_JOBS_FORMAT_STRING, jobData.getQueue()), serializedJobData);
+      transaction.zrem(serializedJobData);
+      transaction.exec();
+
+      return true;
+    } catch (IOException ex) {
+      LOGGER.error(
+          "Failed to deserialize jobData {}, removing bad job data.", serializedJobData, ex);
+      transaction.zrem(serializedJobData);
+      transaction.exec();
+      return true;
     }
   }
 }

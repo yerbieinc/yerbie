@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.*;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.yerbie.core.JobManager;
 import com.yerbie.core.job.JobData;
 import com.yerbie.core.job.JobSerializer;
@@ -38,12 +39,13 @@ public class JobManagerTest {
   }
 
   @Test
-  public void testCreateJob() {
-    jobManager.createJob(1000, "jobData", "normal");
-    verify(mockJedis).multi();
-    verify(mockTransaction).zadd(eq("delayed_jobs"), eq(1596319740.0), anyString(), any());
-    verify(mockTransaction).sadd(eq("job_data"), anyString(), eq("jobData"));
-    verify(mockTransaction).exec();
+  public void testCreateJob() throws Exception {
+    when(mockJobSerializer.serializeJob(any())).thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
+
+    jobManager.createJob(10, "JOB_PAYLOAD", "queue");
+
+    verify(mockJedis)
+        .zadd(eq("delayed_jobs"), eq(1596318750.0), eq(StubData.SAMPLE_JOB_DATA_STRING), any());
   }
 
   @Test
@@ -90,6 +92,21 @@ public class JobManagerTest {
 
     verify(mockJedis).multi();
     verify(mockTransaction).lpop("ready_jobs_queue");
+    verify(mockTransaction).exec();
+  }
+
+  @Test
+  public void testHandleJobsIsSuccessful() throws Exception {
+    when(mockJedis.zrangeByScore("delayed_jobs", 0, 10, 0, 1))
+        .thenReturn(ImmutableSet.of(StubData.SAMPLE_JOB_DATA_STRING));
+    when(mockJobSerializer.deserializeJob(StubData.SAMPLE_JOB_DATA_STRING))
+        .thenReturn(StubData.SAMPLE_JOB_DATA);
+
+    jobManager.handleDueJobsToBeProcessed(10);
+
+    verify(mockJedis).multi();
+    verify(mockTransaction).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING);
+    verify(mockTransaction).zrem(StubData.SAMPLE_JOB_DATA_STRING);
     verify(mockTransaction).exec();
   }
 }
