@@ -136,6 +136,8 @@ public class JobManager {
    * @return whether a job was processed or not.
    */
   public boolean handleDueJobsToBeProcessed(long epochSecondsMax) {
+    LOGGER.info("Scanning jobs to be processed earlier than {}", epochSecondsMax);
+
     Set<String> applicableJobs =
         jedis.zrangeByScore(REDIS_DELAYED_JOBS_SORTED_SET, 0, epochSecondsMax, 0, 1);
 
