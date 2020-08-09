@@ -44,8 +44,9 @@ public class JobManagerTest {
 
     jobManager.createJob(10, "JOB_PAYLOAD", "queue");
 
-    verify(mockJedis)
-        .zadd(eq("delayed_jobs"), eq(1596318750.0), eq(StubData.SAMPLE_JOB_DATA_STRING), any());
+    verify(mockJedis).multi();
+    verify(mockTransaction).zadd(eq("delayed_jobs"), eq(1596318750.0), anyString(), any());
+    verify(mockTransaction).hset(eq("job_data"), anyString(), eq(StubData.SAMPLE_JOB_DATA_STRING));
   }
 
   @Test
@@ -53,7 +54,7 @@ public class JobManagerTest {
     jobManager.deleteJob("jobToken", "normal");
     verify(mockJedis).multi();
     verify(mockTransaction).zrem("delayed_jobs", "jobToken");
-    verify(mockTransaction).srem("job_data", "jobToken");
+    verify(mockTransaction).hdel("job_data", "jobToken");
     verify(mockTransaction).exec();
   }
 
@@ -98,15 +99,30 @@ public class JobManagerTest {
   @Test
   public void testHandleJobsIsSuccessful() throws Exception {
     when(mockJedis.zrangeByScore("delayed_jobs", 0, 10, 0, 1))
-        .thenReturn(ImmutableSet.of(StubData.SAMPLE_JOB_DATA_STRING));
+        .thenReturn(ImmutableSet.of(StubData.SAMPLE_JOB_DATA.getJobToken()));
     when(mockJobSerializer.deserializeJob(StubData.SAMPLE_JOB_DATA_STRING))
         .thenReturn(StubData.SAMPLE_JOB_DATA);
+    when(mockJedis.hget("job_data", StubData.SAMPLE_JOB_DATA.getJobToken()))
+        .thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
+    when(mockJedis.hexists("job_data", StubData.SAMPLE_JOB_DATA.getJobToken())).thenReturn(true);
 
     jobManager.handleDueJobsToBeProcessed(10);
 
     verify(mockJedis).multi();
     verify(mockTransaction).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING);
-    verify(mockTransaction).zrem(StubData.SAMPLE_JOB_DATA_STRING);
+    verify(mockTransaction).zrem("delayed_jobs", StubData.SAMPLE_JOB_DATA.getJobToken());
+    verify(mockTransaction).hdel("job_data", StubData.SAMPLE_JOB_DATA.getJobToken());
     verify(mockTransaction).exec();
+  }
+
+  @Test
+  public void testHandleJobsButNoToken() throws Exception {
+    when(mockJedis.zrangeByScore("delayed_jobs", 0, 10, 0, 1))
+        .thenReturn(ImmutableSet.of(StubData.SAMPLE_JOB_DATA.getJobToken()));
+    when(mockJedis.hexists("job_data", StubData.SAMPLE_JOB_DATA.getJobToken())).thenReturn(false);
+
+    jobManager.handleDueJobsToBeProcessed(10);
+
+    verify(mockJedis).zrem("delayed_jobs", StubData.SAMPLE_JOB_DATA.getJobToken());
   }
 }

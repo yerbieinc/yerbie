@@ -1,6 +1,30 @@
 # Yerbie
 Job Queue and Scheduler
 
+## Yerbie API
+
+### Create Job
+This creates a job to be scheduled by Yerbie for a certain delay.
+
+Parameters:
+delaySeconds - amount of seconds to delay the job execution for
+jobData - serialized string of job payload
+queue - queue name for which this job should go to.
+
+Sample Request
+```
+  curl -H "Content-Type: application/json" -X POST -d '{"jobData":"JOB_DATA","delaySeconds":5,"queue":"high_priority_queue"}' localhost:5865/jobs/schedule 
+```
+
+### Reserve Job
+This requests a job from Yerbie to indicate that it is being processed by a worker. Yerbie will mark this
+job as running, and the worker must tell Yerbie that it has finished with the job, otherwise Yerbie will enqueue
+the job again after a certain amount of time.
+
+Sample Request
+```
+curl -X POST "localhost:5865/jobs/reserve?queue=high_priority_queue"
+```
 
 ## Local Development
 In IntelliJ IDEA CE -> Open as Project -> build.gradle

@@ -36,7 +36,7 @@ public class Scheduler implements Managed {
   public void start() {
     LOGGER.info("Starting scheduler.");
 
-    this.processing = true;
+    processing = true;
 
     executorService.submit(
         () -> {
@@ -61,7 +61,7 @@ public class Scheduler implements Managed {
   public void stop() {
     LOGGER.info("Shutting down scheduler.");
 
-    this.processing = false;
+    processing = false;
     executorService.shutdown();
 
     try {

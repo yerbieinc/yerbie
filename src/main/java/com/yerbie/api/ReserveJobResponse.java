@@ -36,6 +36,11 @@ public class ReserveJobResponse {
     return queue;
   }
 
+  @JsonProperty
+  public String getJobToken() {
+    return jobToken;
+  }
+
   @Override
   public boolean equals(Object other) {
     if (other == this) return true;
