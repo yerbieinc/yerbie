@@ -48,7 +48,7 @@ public class Scheduler implements Managed {
               try {
                 LOGGER.info(
                     "Found no jobs to be processed, sleeping for {} seconds", SLEEP_SECONDS);
-                Thread.sleep(SLEEP_SECONDS);
+                Thread.sleep(TimeUnit.SECONDS.toMillis(SLEEP_SECONDS));
               } catch (InterruptedException ex) {
                 LOGGER.error("Scheduler interrupted while sleeping.", ex);
               }
