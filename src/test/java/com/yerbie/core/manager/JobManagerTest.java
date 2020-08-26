@@ -1,6 +1,7 @@
 package com.yerbie.core.manager;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 
 import com.google.common.collect.ImmutableList;
@@ -19,11 +20,13 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.Transaction;
 
 @RunWith(MockitoJUnitRunner.class)
 public class JobManagerTest {
   @Mock Jedis mockJedis;
+  @Mock JedisPool mockJedisPool;
   @Mock Transaction mockTransaction;
   @Mock JobSerializer mockJobSerializer;
   JobManager jobManager;
@@ -32,10 +35,11 @@ public class JobManagerTest {
   public void setUp() {
     jobManager =
         new JobManager(
-            mockJedis,
+            mockJedisPool,
             mockJobSerializer,
             Clock.fixed(StubData.AUGUST_ONE_INSTANT, ZoneId.systemDefault()));
     when(mockJedis.multi()).thenReturn(mockTransaction);
+    when(mockJedisPool.getResource()).thenReturn(mockJedis);
   }
 
   @Test
@@ -46,7 +50,8 @@ public class JobManagerTest {
 
     verify(mockJedis).multi();
     verify(mockTransaction).zadd(eq("delayed_jobs"), eq(1596318750.0), anyString(), any());
-    verify(mockTransaction).hset(eq("job_data"), anyString(), eq(StubData.SAMPLE_JOB_DATA_STRING));
+    verify(mockTransaction)
+        .hset(eq("delayed_jobs_data"), anyString(), eq(StubData.SAMPLE_JOB_DATA_STRING));
   }
 
   @Test
@@ -54,7 +59,7 @@ public class JobManagerTest {
     jobManager.deleteJob("jobToken", "normal");
     verify(mockJedis).multi();
     verify(mockTransaction).zrem("delayed_jobs", "jobToken");
-    verify(mockTransaction).hdel("job_data", "jobToken");
+    verify(mockTransaction).hdel("delayed_jobs_data", "jobToken");
     verify(mockTransaction).exec();
   }
 
@@ -70,7 +75,7 @@ public class JobManagerTest {
 
     verify(mockJedis).multi();
     verify(mockTransaction).lpop("ready_jobs_queue");
-    verify(mockTransaction).zadd(eq("running_jobs"), eq(1596318740.0), eq("JOB_DATA"), any());
+    verify(mockTransaction).zadd(eq("running_jobs"), eq(1596318755.0), eq("jobToken"), any());
     verify(mockTransaction).exec();
   }
 
@@ -102,16 +107,16 @@ public class JobManagerTest {
         .thenReturn(ImmutableSet.of(StubData.SAMPLE_JOB_DATA.getJobToken()));
     when(mockJobSerializer.deserializeJob(StubData.SAMPLE_JOB_DATA_STRING))
         .thenReturn(StubData.SAMPLE_JOB_DATA);
-    when(mockJedis.hget("job_data", StubData.SAMPLE_JOB_DATA.getJobToken()))
+    when(mockJedis.hget("delayed_jobs_data", StubData.SAMPLE_JOB_DATA.getJobToken()))
         .thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
-    when(mockJedis.hexists("job_data", StubData.SAMPLE_JOB_DATA.getJobToken())).thenReturn(true);
+    when(mockJedis.hexists("delayed_jobs_data", StubData.SAMPLE_JOB_DATA.getJobToken()))
+        .thenReturn(true);
 
     jobManager.handleDueJobsToBeProcessed(10);
 
     verify(mockJedis).multi();
     verify(mockTransaction).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING);
     verify(mockTransaction).zrem("delayed_jobs", StubData.SAMPLE_JOB_DATA.getJobToken());
-    verify(mockTransaction).hdel("job_data", StubData.SAMPLE_JOB_DATA.getJobToken());
     verify(mockTransaction).exec();
   }
 
@@ -119,10 +124,53 @@ public class JobManagerTest {
   public void testHandleJobsButNoToken() throws Exception {
     when(mockJedis.zrangeByScore("delayed_jobs", 0, 10, 0, 1))
         .thenReturn(ImmutableSet.of(StubData.SAMPLE_JOB_DATA.getJobToken()));
-    when(mockJedis.hexists("job_data", StubData.SAMPLE_JOB_DATA.getJobToken())).thenReturn(false);
+    when(mockJedis.hexists("delayed_jobs_data", StubData.SAMPLE_JOB_DATA.getJobToken()))
+        .thenReturn(false);
 
     jobManager.handleDueJobsToBeProcessed(10);
 
     verify(mockJedis).zrem("delayed_jobs", StubData.SAMPLE_JOB_DATA.getJobToken());
+  }
+
+  @Test
+  public void testMarkJobAsComplete() {
+    jobManager.markJobAsComplete("jobToken");
+    verify(mockJedis).sadd("completed_jobs", "jobToken");
+  }
+
+  @Test
+  public void testHandleJobsNotMarkedAsCompleteJobComplete() {
+    String jobToken = StubData.SAMPLE_JOB_DATA.getJobToken();
+    when(mockJedis.zrangeByScore("running_jobs", 0, 10, 0, 1))
+        .thenReturn(ImmutableSet.of(jobToken));
+    when(mockJedis.sismember("completed_jobs", jobToken)).thenReturn(true);
+
+    assertTrue(jobManager.handleJobsNotMarkedAsComplete(10));
+
+    verify(mockJedis).multi();
+    verify(mockJedis).watch("completed_jobs");
+    verify(mockTransaction).srem("completed_jobs", jobToken);
+    verify(mockTransaction).hdel("running_jobs_data", jobToken);
+    verify(mockTransaction).zrem("running_jobs", jobToken);
+    verify(mockTransaction).exec();
+  }
+
+  @Test
+  public void testHandleJobsNotMarkedCompleteNotComplete() throws Exception {
+    String jobToken = StubData.SAMPLE_JOB_DATA.getJobToken();
+    when(mockJedis.zrangeByScore("running_jobs", 0, 10, 0, 1))
+        .thenReturn(ImmutableSet.of(jobToken));
+    when(mockJedis.sismember("completed_jobs", jobToken)).thenReturn(false);
+    when(mockJedis.hget("running_jobs_data", jobToken)).thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
+    when(mockJobSerializer.deserializeJob(StubData.SAMPLE_JOB_DATA_STRING))
+        .thenReturn(StubData.SAMPLE_JOB_DATA);
+
+    assertTrue(jobManager.handleJobsNotMarkedAsComplete(10));
+
+    verify(mockJedis).multi();
+    verify(mockTransaction).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING);
+    verify(mockTransaction).zrem("running_jobs", jobToken);
+    verify(mockTransaction).hdel("running_jobs_data", jobToken);
+    verify(mockTransaction).exec();
   }
 }

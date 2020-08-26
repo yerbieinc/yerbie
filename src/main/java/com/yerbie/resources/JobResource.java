@@ -7,6 +7,7 @@ import com.yerbie.api.ScheduleJobResponse;
 import com.yerbie.core.JobManager;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 @Path("/jobs")
 @Produces(MediaType.APPLICATION_JSON)
@@ -45,5 +46,13 @@ public class JobResource {
                     jobData.getQueue(),
                     jobData.getJobToken()))
         .orElse(NO_JOB_RESPONSE);
+  }
+
+  @POST
+  @Path("/finished")
+  @Timed
+  public Response markJobAsFinished(@QueryParam("jobToken") String jobToken) {
+    jobManager.markJobAsComplete(jobToken);
+    return Response.status(200).build();
   }
 }

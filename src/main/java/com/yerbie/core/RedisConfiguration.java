@@ -2,7 +2,8 @@ package com.yerbie.core;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public class EndpointConfiguration {
+// TODO(claudio.wilson): Add more configuration.
+public class RedisConfiguration {
 
   @JsonProperty("host")
   String host;

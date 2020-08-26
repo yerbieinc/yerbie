@@ -9,45 +9,44 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * This is the main thread which scans for jobs ready to be scheduled and added to a queue ready to
- * be processed by workers.
- *
- * <p>TODO we need locking and failover mechanisms here otherwise we risk enqueueing more than one
- * item.
- */
-public class Scheduler implements Managed {
+public class JobFailureHandler implements Managed {
+
   private static final long SLEEP_SECONDS = 3;
-  private static final Logger LOGGER = LoggerFactory.getLogger(Scheduler.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(JobFailureHandler.class);
 
   private ExecutorService executorService;
   private JobManager jobManager;
-  private Clock clock;
   private boolean processing;
+  private Clock clock;
 
-  public Scheduler(JobManager jobManager, Clock clock) {
-    this.executorService = Executors.newSingleThreadExecutor();
+  public JobFailureHandler(JobManager jobManager, Clock clock) {
     this.jobManager = jobManager;
-    this.clock = clock;
+    this.executorService = Executors.newSingleThreadExecutor();
     this.processing = false;
+    this.clock = clock;
   }
 
   @Override
   public void start() {
-    LOGGER.info("Starting scheduler.");
+    LOGGER.info("Starting job failure handler.");
 
     processing = true;
 
     executorService.submit(
         () -> {
           while (processing) {
-            boolean processedJobs =
-                jobManager.handleDueJobsToBeProcessed(Instant.now(clock).getEpochSecond());
+            boolean processedJobs = false;
+
+            try {
+              processedJobs =
+                  jobManager.handleJobsNotMarkedAsComplete(Instant.now(clock).getEpochSecond());
+            } catch (Exception ex) {
+              LOGGER.error("Encountered exception handling failed jobs.", ex);
+            }
 
             if (!processedJobs) {
               try {
-                LOGGER.info(
-                    "Found no jobs to be processed, sleeping for {} seconds", SLEEP_SECONDS);
+                LOGGER.info("Found no failed jobs, sleeping for {} seconds", SLEEP_SECONDS);
                 Thread.sleep(TimeUnit.SECONDS.toMillis(SLEEP_SECONDS));
               } catch (InterruptedException ex) {
                 LOGGER.error("Scheduler interrupted while sleeping.", ex);
@@ -59,7 +58,7 @@ public class Scheduler implements Managed {
 
   @Override
   public void stop() {
-    LOGGER.info("Shutting down scheduler.");
+    LOGGER.info("Shutting down job failure handler.");
 
     processing = false;
     executorService.shutdown();

@@ -12,22 +12,26 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.Transaction;
 import redis.clients.jedis.params.ZAddParams;
 
 public class JobManager {
   private static final Logger LOGGER = LoggerFactory.getLogger(JobManager.class);
   private static final String REDIS_DELAYED_JOBS_SORTED_SET = "delayed_jobs";
-  private static final String REDIS_JOB_DATA_SORTED_SET = "job_data";
+  private static final String REDIS_DELAYED_JOBS_DATA_SET = "delayed_jobs_data";
   private static final String REDIS_READY_JOBS_FORMAT_STRING = "ready_jobs_%s";
   private static final String REDIS_RUNNING_JOBS_SORTED_SET = "running_jobs";
+  private static final String REDIS_RUNNING_JOBS_DATA_SET = "running_jobs_data";
+  private static final String REDIS_COMPLETED_JOBS_SET = "completed_jobs";
+  private static final long FAILURE_TIMEOUT_SECONDS = 15;
 
-  private final Jedis jedis;
+  private final JedisPool jedisPool;
   private final JobSerializer jobSerializer;
   private final Clock clock;
 
-  public JobManager(Jedis jedis, JobSerializer jobSerializer, Clock clock) {
-    this.jedis = jedis;
+  public JobManager(JedisPool jedisPool, JobSerializer jobSerializer, Clock clock) {
+    this.jedisPool = jedisPool;
     this.jobSerializer = jobSerializer;
     this.clock = clock;
   }
@@ -48,41 +52,56 @@ public class JobManager {
         delaySeconds,
         queue);
 
-    Transaction transaction = jedis.multi();
-    try {
-      transaction.zadd(
-          REDIS_DELAYED_JOBS_SORTED_SET,
-          Instant.now(clock).plusSeconds(delaySeconds).getEpochSecond(),
-          jobToken,
-          ZAddParams.zAddParams().nx());
-      transaction.hset(
-          REDIS_JOB_DATA_SORTED_SET,
-          jobToken,
-          jobSerializer.serializeJob(new JobData(jobPayload, delaySeconds, queue, jobToken)));
-      transaction.exec();
-    } catch (IOException ex) {
-      LOGGER.error("Unable to serialize job into jobData.", ex);
-      transaction.discard();
-      throw new SerializationException();
+    try (Jedis jedis = jedisPool.getResource()) {
+      Transaction transaction = jedis.multi();
+      try {
+        transaction.zadd(
+            REDIS_DELAYED_JOBS_SORTED_SET,
+            Instant.now(clock).plusSeconds(delaySeconds).getEpochSecond(),
+            jobToken,
+            ZAddParams.zAddParams().nx());
+        transaction.hset(
+            REDIS_DELAYED_JOBS_DATA_SET,
+            jobToken,
+            jobSerializer.serializeJob(new JobData(jobPayload, delaySeconds, queue, jobToken)));
+        transaction.exec();
+      } catch (IOException ex) {
+        LOGGER.error("Unable to serialize job into jobData.", ex);
+        transaction.discard();
+        throw new SerializationException();
+      }
+
+      LOGGER.debug(
+          "Added JobToken {} with delaySeconds {} into queue {}", jobToken, delaySeconds, queue);
+
+      return jobToken;
     }
-
-    LOGGER.debug(
-        "Added JobToken {} with delaySeconds {} into queue {}", jobToken, delaySeconds, queue);
-
-    return jobToken;
   }
 
   public void deleteJob(String jobToken, String queue) {
-    Transaction transaction = jedis.multi();
+    try (Jedis jedis = jedisPool.getResource()) {
+      Transaction transaction = jedis.multi();
 
-    LOGGER.debug("Deleting job with token {} from queue {}", jobToken, queue);
+      LOGGER.debug("Deleting job with token {} from queue {}", jobToken, queue);
 
-    transaction.zrem(REDIS_DELAYED_JOBS_SORTED_SET, jobToken);
-    transaction.hdel(REDIS_JOB_DATA_SORTED_SET, jobToken);
+      transaction.zrem(REDIS_DELAYED_JOBS_SORTED_SET, jobToken);
+      transaction.hdel(REDIS_DELAYED_JOBS_DATA_SET, jobToken);
 
-    LOGGER.debug("Deleted job with token {} from queue {}", jobToken, queue);
+      LOGGER.debug("Deleted job with token {} from queue {}", jobToken, queue);
 
-    transaction.exec();
+      transaction.exec();
+    }
+  }
+
+  /**
+   * Marks the job as compelte by adding it to the completed set.
+   *
+   * <p>The failure handler will see that it is complete, and not queue the job for retrying.
+   */
+  public void markJobAsComplete(String jobToken) {
+    try (Jedis jedis = jedisPool.getResource()) {
+      jedis.sadd(REDIS_COMPLETED_JOBS_SET, jobToken);
+    }
   }
 
   /**
@@ -92,45 +111,48 @@ public class JobManager {
    * @param queue
    */
   public Optional<JobData> reserveJob(String queue) {
-    if (!jedis.exists(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue))) {
-      return Optional.empty();
-    }
+    try (Jedis jedis = jedisPool.getResource()) {
+      if (!jedis.exists(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue))) {
+        return Optional.empty();
+      }
 
-    LOGGER.debug("Attempting to reserve job from queue {}", queue);
+      LOGGER.debug("Attempting to reserve job from queue {}", queue);
 
-    jedis.watch(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
+      jedis.watch(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
 
-    Optional<String> serializedJobOptional =
-        jedis.lrange(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue), 0, 0).stream()
-            .findFirst();
+      Optional<String> serializedJobOptional =
+          jedis.lrange(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue), 0, 0).stream()
+              .findFirst();
 
-    if (!serializedJobOptional.isPresent()) {
-      jedis.unwatch();
-      LOGGER.debug("No jobs in ready job queue {}", queue);
-      return Optional.empty();
-    }
+      if (!serializedJobOptional.isPresent()) {
+        jedis.unwatch();
+        LOGGER.debug("No jobs in ready job queue {}", queue);
+        return Optional.empty();
+      }
 
-    Transaction transaction = jedis.multi();
-    String serializedJob = serializedJobOptional.get();
+      Transaction transaction = jedis.multi();
+      String serializedJob = serializedJobOptional.get();
 
-    try {
-      JobData jobData = jobSerializer.deserializeJob(serializedJob);
+      try {
+        JobData jobData = jobSerializer.deserializeJob(serializedJob);
 
-      transaction.zadd(
-          REDIS_RUNNING_JOBS_SORTED_SET,
-          Instant.now(clock).getEpochSecond(),
-          serializedJob,
-          ZAddParams.zAddParams().nx());
-      transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
-      transaction.exec();
+        transaction.zadd(
+            REDIS_RUNNING_JOBS_SORTED_SET,
+            Instant.now(clock).getEpochSecond() + FAILURE_TIMEOUT_SECONDS,
+            jobData.getJobToken(),
+            ZAddParams.zAddParams().nx());
+        transaction.hset(REDIS_RUNNING_JOBS_DATA_SET, jobData.getJobToken(), serializedJob);
+        transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
+        transaction.exec();
 
-      LOGGER.debug("Removed job {} from ready job queue {}", jobData.getJobToken(), queue);
-      return Optional.of(jobData);
-    } catch (IOException ex) {
-      LOGGER.error("Failed to deserialize jobData {}, removing bad job data.", serializedJob, ex);
-      transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
-      transaction.exec();
-      return Optional.empty();
+        LOGGER.debug("Removed job {} from ready job queue {}", jobData.getJobToken(), queue);
+        return Optional.of(jobData);
+      } catch (IOException ex) {
+        LOGGER.error("Failed to deserialize jobData {}, removing bad job data.", serializedJob, ex);
+        transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
+        transaction.exec();
+        return Optional.empty();
+      }
     }
   }
 
@@ -145,45 +167,108 @@ public class JobManager {
   public boolean handleDueJobsToBeProcessed(long epochSecondsMax) {
     LOGGER.info("Scanning jobs to be processed earlier than {}", epochSecondsMax);
 
-    Set<String> applicableJobTokens =
-        jedis.zrangeByScore(REDIS_DELAYED_JOBS_SORTED_SET, 0, epochSecondsMax, 0, 1);
+    try (Jedis jedis = jedisPool.getResource()) {
+      Set<String> applicableJobTokens =
+          jedis.zrangeByScore(REDIS_DELAYED_JOBS_SORTED_SET, 0, epochSecondsMax, 0, 1);
 
-    if (applicableJobTokens.isEmpty()) {
-      return false;
+      if (applicableJobTokens.isEmpty()) {
+        return false;
+      }
+
+      String jobToken = applicableJobTokens.stream().findFirst().get();
+
+      if (!jedis.hexists(REDIS_DELAYED_JOBS_DATA_SET, jobToken)) {
+        LOGGER.error("No job data found for token {}, removing token.", jobToken);
+        jedis.zrem(REDIS_DELAYED_JOBS_SORTED_SET, jobToken);
+        return false;
+      }
+
+      String serializedJobData = jedis.hget(REDIS_DELAYED_JOBS_DATA_SET, jobToken);
+
+      Transaction transaction = jedis.multi();
+
+      try {
+        JobData jobData = jobSerializer.deserializeJob(serializedJobData);
+
+        transaction.rpush(
+            String.format(REDIS_READY_JOBS_FORMAT_STRING, jobData.getQueue()), serializedJobData);
+        transaction.zrem(REDIS_DELAYED_JOBS_SORTED_SET, jobToken);
+        transaction.hdel(REDIS_DELAYED_JOBS_DATA_SET, jobToken);
+        transaction.exec();
+
+        LOGGER.info(
+            "Moved job with token {} into queue {}", jobData.getJobToken(), jobData.getQueue());
+
+        return true;
+      } catch (IOException ex) {
+        LOGGER.error(
+            "Failed to deserialize jobData {}, removing bad job data.", serializedJobData, ex);
+        transaction.zrem(REDIS_DELAYED_JOBS_SORTED_SET, serializedJobData);
+        transaction.hdel(REDIS_DELAYED_JOBS_DATA_SET, jobToken);
+        transaction.exec();
+        return true;
+      }
     }
+  }
 
-    String jobToken = applicableJobTokens.stream().findFirst().get();
+  /**
+   * Scans for jobs that have been in the running jobs sorted set for longer than epochSecondsMax,
+   * if so, this means that the client has likely encountered a catastrophic failure and was unable
+   * to process the job. We then move the job into the ready set again. There's a potential infinite
+   * loop, but if the client can pull jobs then they should also be able to mark jobs as complete.
+   * Only call this if you have the parent scheduler lock.
+   */
+  public boolean handleJobsNotMarkedAsComplete(long epochSecondsMax) {
+    LOGGER.info("Scanning for jobs not marked as complete {}", epochSecondsMax);
 
-    if (!jedis.hexists(REDIS_JOB_DATA_SORTED_SET, jobToken)) {
-      LOGGER.error("No job data found for token {}, removing token.", jobToken);
-      jedis.zrem(REDIS_DELAYED_JOBS_SORTED_SET, jobToken);
-      return false;
-    }
+    try (Jedis jedis = jedisPool.getResource()) {
+      Set<String> applicableJobs =
+          jedis.zrangeByScore(REDIS_RUNNING_JOBS_SORTED_SET, 0, epochSecondsMax, 0, 1);
 
-    String serializedJobData = jedis.hget(REDIS_JOB_DATA_SORTED_SET, jobToken);
+      if (applicableJobs.isEmpty()) {
+        return false;
+      }
 
-    Transaction transaction = jedis.multi();
+      String jobToken = applicableJobs.stream().findFirst().get();
 
-    try {
-      JobData jobData = jobSerializer.deserializeJob(serializedJobData);
+      jedis.watch(REDIS_COMPLETED_JOBS_SET);
 
-      transaction.rpush(
-          String.format(REDIS_READY_JOBS_FORMAT_STRING, jobData.getQueue()), serializedJobData);
-      transaction.zrem(REDIS_DELAYED_JOBS_SORTED_SET, jobToken);
-      transaction.hdel(REDIS_JOB_DATA_SORTED_SET, jobToken);
-      transaction.exec();
+      if (jedis.sismember(REDIS_COMPLETED_JOBS_SET, jobToken)) {
+        Transaction transaction = jedis.multi();
+        transaction.srem(REDIS_COMPLETED_JOBS_SET, jobToken);
+        transaction.hdel(REDIS_RUNNING_JOBS_DATA_SET, jobToken);
+        transaction.zrem(REDIS_RUNNING_JOBS_SORTED_SET, jobToken);
+        transaction.exec();
+        return true;
+      }
 
-      LOGGER.info(
-          "Moved job with token {} into queue {}", jobData.getJobToken(), jobData.getQueue());
+      String serializedJobData = jedis.hget(REDIS_RUNNING_JOBS_DATA_SET, jobToken);
 
-      return true;
-    } catch (IOException ex) {
-      LOGGER.error(
-          "Failed to deserialize jobData {}, removing bad job data.", serializedJobData, ex);
-      transaction.zrem(REDIS_DELAYED_JOBS_SORTED_SET, serializedJobData);
-      transaction.hdel(REDIS_JOB_DATA_SORTED_SET, jobToken);
-      transaction.exec();
-      return true;
+      try {
+        JobData jobData = jobSerializer.deserializeJob(serializedJobData);
+
+        LOGGER.info(
+            "Moving back job with token {} into queue {}",
+            jobData.getJobToken(),
+            jobData.getQueue());
+
+        Transaction transaction = jedis.multi();
+        transaction.rpush(
+            String.format(REDIS_READY_JOBS_FORMAT_STRING, jobData.getQueue()), serializedJobData);
+        transaction.zrem(REDIS_RUNNING_JOBS_SORTED_SET, jobToken);
+        transaction.hdel(REDIS_RUNNING_JOBS_DATA_SET, jobToken);
+        transaction.exec();
+
+        return true;
+      } catch (IOException ex) {
+        LOGGER.error(
+            "Could not deserialize job from running job set {}, removing job data",
+            serializedJobData,
+            ex);
+        jedis.zrem(REDIS_RUNNING_JOBS_SORTED_SET, serializedJobData);
+        jedis.unwatch();
+        return true;
+      }
     }
   }
 }
