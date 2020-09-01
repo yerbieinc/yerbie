@@ -53,3 +53,5 @@ This will only build Yerbie, but none of its dependencies.
 `docker ps` -> This shows running containers.
 
 `docker images` -> Shows images you've built.
+
+`docker kill <container_id>` -> Kills a container. Useful for testing distributed locking mechanisms.

@@ -24,6 +24,7 @@ public class JobManager {
   private static final String REDIS_RUNNING_JOBS_SORTED_SET = "running_jobs";
   private static final String REDIS_RUNNING_JOBS_DATA_SET = "running_jobs_data";
   private static final String REDIS_COMPLETED_JOBS_SET = "completed_jobs";
+  // TODO: make this configurable.
   private static final long FAILURE_TIMEOUT_SECONDS = 15;
 
   private final JedisPool jedisPool;
@@ -217,9 +218,11 @@ public class JobManager {
    * to process the job. We then move the job into the ready set again. There's a potential infinite
    * loop, but if the client can pull jobs then they should also be able to mark jobs as complete.
    * Only call this if you have the parent scheduler lock.
+   *
+   * <p>// TODO add max amount of times they can be enqueued into the ready set again.
    */
   public boolean handleJobsNotMarkedAsComplete(long epochSecondsMax) {
-    LOGGER.info("Scanning for jobs not marked as complete {}", epochSecondsMax);
+    LOGGER.info("Scanning for jobs not marked as complete at {}", epochSecondsMax);
 
     try (Jedis jedis = jedisPool.getResource()) {
       Set<String> applicableJobs =

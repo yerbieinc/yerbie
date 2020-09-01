@@ -20,16 +20,20 @@ public class JobScheduler implements Managed {
   private static final long SLEEP_SECONDS = 3;
   private static final Logger LOGGER = LoggerFactory.getLogger(JobScheduler.class);
 
-  private ExecutorService executorService;
-  private JobManager jobManager;
-  private Clock clock;
+  private final ExecutorService executorService;
+  private final JobManager jobManager;
+  private final Clock clock;
+  private final Locking locking;
   private boolean processing;
+  private boolean isParent;
 
-  public JobScheduler(JobManager jobManager, Clock clock) {
+  public JobScheduler(JobManager jobManager, Clock clock, Locking locking) {
     this.executorService = Executors.newSingleThreadExecutor();
     this.jobManager = jobManager;
     this.clock = clock;
+    this.locking = locking;
     this.processing = false;
+    this.isParent = false;
   }
 
   @Override
@@ -44,9 +48,22 @@ public class JobScheduler implements Managed {
             boolean processedJobs = false;
 
             try {
-              processedJobs =
-                  jobManager.handleDueJobsToBeProcessed(Instant.now(clock).getEpochSecond());
+              long epochSeconds = Instant.now(clock).getEpochSecond();
+
+              isParent = locking.isParent();
+
+              LOGGER.info("Scheduler is parent: {}", isParent);
+
+              if (isParent) {
+                LOGGER.info("Scanning for due jobs and failures.");
+
+                processedJobs = jobManager.handleDueJobsToBeProcessed(epochSeconds);
+                processedJobs =
+                    jobManager.handleJobsNotMarkedAsComplete(epochSeconds) || processedJobs;
+              }
+
             } catch (Exception ex) {
+              // TODO only catch intermittent errors;
               LOGGER.error("Encountered exception handling failed jobs.", ex);
             }
 
