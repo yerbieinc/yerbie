@@ -1,10 +1,10 @@
 package com.yerbie.core;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.lifecycle.Managed;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,14 +26,17 @@ public class JobScheduler implements Managed {
   private final Locking locking;
   private boolean processing;
   private boolean isParent;
+  private boolean wasParent;
 
-  public JobScheduler(JobManager jobManager, Clock clock, Locking locking) {
-    this.executorService = Executors.newSingleThreadExecutor();
+  public JobScheduler(
+      JobManager jobManager, Clock clock, Locking locking, ExecutorService executorService) {
+    this.executorService = executorService;
     this.jobManager = jobManager;
     this.clock = clock;
     this.locking = locking;
     this.processing = false;
     this.isParent = false;
+    this.wasParent = false;
   }
 
   @Override
@@ -48,20 +51,7 @@ public class JobScheduler implements Managed {
             boolean processedJobs = false;
 
             try {
-              long epochSeconds = Instant.now(clock).getEpochSecond();
-
-              isParent = locking.isParent();
-
-              LOGGER.info("Scheduler is parent: {}", isParent);
-
-              if (isParent) {
-                LOGGER.info("Scanning for due jobs and failures.");
-
-                processedJobs = jobManager.handleDueJobsToBeProcessed(epochSeconds);
-                processedJobs =
-                    jobManager.handleJobsNotMarkedAsComplete(epochSeconds) || processedJobs;
-              }
-
+              processedJobs = doWork();
             } catch (Exception ex) {
               // TODO only catch intermittent errors;
               LOGGER.error("Encountered exception handling failed jobs.", ex);
@@ -70,7 +60,7 @@ public class JobScheduler implements Managed {
             if (!processedJobs) {
               try {
                 LOGGER.info(
-                    "Found no jobs to be processed, sleeping for {} seconds", SLEEP_SECONDS);
+                    "Found no jobs to be processed, sleeping for {} seconds.", SLEEP_SECONDS);
                 Thread.sleep(TimeUnit.SECONDS.toMillis(SLEEP_SECONDS));
               } catch (InterruptedException ex) {
                 LOGGER.error("Scheduler interrupted while sleeping.", ex);
@@ -78,6 +68,29 @@ public class JobScheduler implements Managed {
             }
           }
         });
+  }
+
+  @VisibleForTesting
+  protected boolean doWork() {
+    long epochSeconds = Instant.now(clock).getEpochSecond();
+
+    isParent = locking.isParent();
+
+    if (isParent != wasParent) {
+      LOGGER.info("Scheduler is parent: {}", isParent);
+      wasParent = isParent;
+    }
+
+    if (isParent) {
+      LOGGER.info("Scanning for due jobs and failures.");
+
+      boolean processedJobs = jobManager.handleDueJobsToBeProcessed(epochSeconds);
+      processedJobs = jobManager.handleJobsNotMarkedAsComplete(epochSeconds) || processedJobs;
+
+      return processedJobs;
+    }
+
+    return false;
   }
 
   @Override

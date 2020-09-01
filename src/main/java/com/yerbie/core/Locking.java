@@ -1,10 +1,6 @@
 package com.yerbie.core;
 
 import com.google.common.collect.ImmutableList;
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -13,24 +9,27 @@ import redis.clients.jedis.JedisPool;
 public class Locking {
   private static final Logger LOGGER = LoggerFactory.getLogger(Locking.class);
   private static final String REDIS_PARENT_LOCK_KEY = "yerbie_master_lock_key";
-  private static final String ACQUIRE_LOCK_LUA_SCRIPT_FILENAME = "acquire_lock.lua";
-  private static final String HAS_LOCK_LUA_SCRIPT_FILENAME = "has_lock.lua";
 
   private final JedisPool jedisPool;
   private final String lockKeyValue;
   private final String acquireScriptSha;
   private final String hasLockScriptSha;
 
-  public Locking(JedisPool jedisPool, String lockKeyValue) {
+  public Locking(
+      JedisPool jedisPool, String lockKeyValue, String acquireScriptSha, String hasLockScriptSha) {
     LOGGER.info(
         "Loading Lua Scripts into Redis. This Yerbie instance has lock value {}", lockKeyValue);
 
     this.jedisPool = jedisPool;
     this.lockKeyValue = lockKeyValue;
-    this.acquireScriptSha = loadScript(ACQUIRE_LOCK_LUA_SCRIPT_FILENAME);
-    this.hasLockScriptSha = loadScript(HAS_LOCK_LUA_SCRIPT_FILENAME);
+    this.acquireScriptSha = acquireScriptSha;
+    this.hasLockScriptSha = hasLockScriptSha;
   }
 
+  /**
+   * Attempts to acquire the lock. If it already has the lock, updates the expiry in REDIS to
+   * continue being the parent.
+   */
   public boolean isParent() {
     return acquireLock() || hasLock();
   }
@@ -49,19 +48,6 @@ public class Locking {
               jedis.evalsha(
                   sha, ImmutableList.of(REDIS_PARENT_LOCK_KEY), ImmutableList.of(lockKeyValue))
           == 1;
-    }
-  }
-
-  private String getScript(String filename) {
-    InputStream luaInputstream = Locking.class.getClassLoader().getResourceAsStream(filename);
-    return new BufferedReader(new InputStreamReader(luaInputstream))
-        .lines()
-        .collect(Collectors.joining("\n"));
-  }
-
-  private String loadScript(String filename) {
-    try (Jedis jedis = jedisPool.getResource()) {
-      return jedis.scriptLoad(getScript(filename));
     }
   }
 }
