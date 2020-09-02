@@ -1,13 +1,13 @@
 package com.yerbie.resources;
 
 import com.codahale.metrics.annotation.Timed;
+import com.yerbie.api.FinishJobResponse;
 import com.yerbie.api.ReserveJobResponse;
 import com.yerbie.api.ScheduleJobRequest;
 import com.yerbie.api.ScheduleJobResponse;
 import com.yerbie.core.JobManager;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 
 @Path("/jobs")
 @Produces(MediaType.APPLICATION_JSON)
@@ -24,6 +24,7 @@ public class JobResource {
   @POST
   @Path("/schedule")
   @Timed
+  @Produces("application/json")
   public ScheduleJobResponse scheduleJob(ScheduleJobRequest scheduleJobRequest) {
     return new ScheduleJobResponse(
         jobManager.createJob(
@@ -35,6 +36,7 @@ public class JobResource {
   @POST
   @Path("/reserve")
   @Timed
+  @Produces("application/json")
   public ReserveJobResponse reserveJob(@QueryParam("queue") String jobQueue) {
     return jobManager
         .reserveJob(jobQueue)
@@ -51,8 +53,12 @@ public class JobResource {
   @POST
   @Path("/finished")
   @Timed
-  public Response markJobAsFinished(@QueryParam("jobToken") String jobToken) {
-    jobManager.markJobAsComplete(jobToken);
-    return Response.status(200).build();
+  @Produces("application/json")
+  public FinishJobResponse markJobAsFinished(@QueryParam("jobToken") String jobToken) {
+    if (jobManager.markJobAsComplete(jobToken)) {
+      return new FinishJobResponse(jobToken);
+    }
+
+    return new FinishJobResponse(null);
   }
 }

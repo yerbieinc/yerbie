@@ -4,10 +4,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 
-import com.google.common.util.concurrent.MoreExecutors;
 import com.yerbie.stub.StubData;
 import java.time.Clock;
 import java.time.ZoneId;
+import java.util.concurrent.Executors;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -25,7 +25,7 @@ public class JobSchedulerTest {
   public void setUp() {
     jobScheduler =
         new JobScheduler(
-            mockJobManager, clock, mockLocking, MoreExecutors.newDirectExecutorService());
+            mockJobManager, clock, mockLocking, Executors.newSingleThreadScheduledExecutor());
   }
 
   @Test

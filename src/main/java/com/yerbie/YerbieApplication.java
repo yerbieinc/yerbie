@@ -42,7 +42,10 @@ public class YerbieApplication extends Application<YerbieConfiguration> {
         .lifecycle()
         .manage(
             new JobScheduler(
-                jobManager, Clock.systemUTC(), locking, Executors.newSingleThreadExecutor()));
+                jobManager,
+                Clock.systemUTC(),
+                locking,
+                Executors.newSingleThreadScheduledExecutor()));
   }
 
   private JedisPool buildJedisPool(RedisConfiguration endpointConfiguration) {

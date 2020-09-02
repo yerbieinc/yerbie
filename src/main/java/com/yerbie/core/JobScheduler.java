@@ -4,23 +4,20 @@ import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.lifecycle.Managed;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * This is the main thread which scans for jobs ready to be scheduled and added to a queue ready to
- * be processed by workers.
- *
- * <p>TODO we need locking and failover mechanisms here otherwise we risk enqueueing more than one
- * item.
+ * be processed by workers, as well as finds jobs which did not get marked as complete.
  */
 public class JobScheduler implements Managed {
-  private static final long SLEEP_SECONDS = 3;
+  private static final long SLEEP_SECONDS = 1;
   private static final Logger LOGGER = LoggerFactory.getLogger(JobScheduler.class);
 
-  private final ExecutorService executorService;
+  private final ScheduledExecutorService executorService;
   private final JobManager jobManager;
   private final Clock clock;
   private final Locking locking;
@@ -29,7 +26,10 @@ public class JobScheduler implements Managed {
   private boolean wasParent;
 
   public JobScheduler(
-      JobManager jobManager, Clock clock, Locking locking, ExecutorService executorService) {
+      JobManager jobManager,
+      Clock clock,
+      Locking locking,
+      ScheduledExecutorService executorService) {
     this.executorService = executorService;
     this.jobManager = jobManager;
     this.clock = clock;
@@ -45,7 +45,7 @@ public class JobScheduler implements Managed {
 
     processing = true;
 
-    executorService.submit(
+    executorService.scheduleWithFixedDelay(
         () -> {
           while (processing) {
             boolean processedJobs = false;
@@ -58,16 +58,13 @@ public class JobScheduler implements Managed {
             }
 
             if (!processedJobs) {
-              try {
-                LOGGER.info(
-                    "Found no jobs to be processed, sleeping for {} seconds.", SLEEP_SECONDS);
-                Thread.sleep(TimeUnit.SECONDS.toMillis(SLEEP_SECONDS));
-              } catch (InterruptedException ex) {
-                LOGGER.error("Scheduler interrupted while sleeping.", ex);
-              }
+              break;
             }
           }
-        });
+        },
+        0,
+        SLEEP_SECONDS,
+        TimeUnit.SECONDS);
   }
 
   @VisibleForTesting

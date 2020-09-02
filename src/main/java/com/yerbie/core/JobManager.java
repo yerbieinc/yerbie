@@ -23,7 +23,6 @@ public class JobManager {
   private static final String REDIS_READY_JOBS_FORMAT_STRING = "ready_jobs_%s";
   private static final String REDIS_RUNNING_JOBS_SORTED_SET = "running_jobs";
   private static final String REDIS_RUNNING_JOBS_DATA_SET = "running_jobs_data";
-  private static final String REDIS_COMPLETED_JOBS_SET = "completed_jobs";
 
   // TODO: make this configurable.
   private static final int FAILURE_TIMEOUT_SECONDS = 15;
@@ -101,9 +100,20 @@ public class JobManager {
    *
    * <p>The failure handler will see that it is complete, and not queue the job for retrying.
    */
-  public void markJobAsComplete(String jobToken) {
+  public boolean markJobAsComplete(String jobToken) {
     try (Jedis jedis = jedisPool.getResource()) {
-      jedis.sadd(REDIS_COMPLETED_JOBS_SET, jobToken);
+      if (!jedis.hexists(REDIS_RUNNING_JOBS_DATA_SET, jobToken)) {
+        return false;
+      }
+
+      Transaction transaction = jedis.multi();
+      transaction.hdel(REDIS_RUNNING_JOBS_DATA_SET, jobToken);
+      transaction.zrem(REDIS_RUNNING_JOBS_SORTED_SET, jobToken);
+      transaction.exec();
+
+      LOGGER.info("Job with token {} is marked as complete.", jobToken);
+
+      return true;
     }
   }
 
@@ -236,18 +246,6 @@ public class JobManager {
       }
 
       String jobToken = applicableJobs.stream().findFirst().get();
-
-      jedis.watch(REDIS_COMPLETED_JOBS_SET);
-
-      if (jedis.sismember(REDIS_COMPLETED_JOBS_SET, jobToken)) {
-        Transaction transaction = jedis.multi();
-        transaction.srem(REDIS_COMPLETED_JOBS_SET, jobToken);
-        transaction.hdel(REDIS_RUNNING_JOBS_DATA_SET, jobToken);
-        transaction.zrem(REDIS_RUNNING_JOBS_SORTED_SET, jobToken);
-        transaction.exec();
-        return true;
-      }
-
       String serializedJobData = jedis.hget(REDIS_RUNNING_JOBS_DATA_SET, jobToken);
 
       try {
