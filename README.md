@@ -2,6 +2,7 @@
 Job Queue and Scheduler
 
 ## Yerbie API
+The following describes the Yerbie API with sample requests with which client libraries interact with.
 
 ### Create Job
 This creates a job to be scheduled by Yerbie for a certain delay.
@@ -17,13 +18,19 @@ Sample Request
 ```
 
 ### Reserve Job
-This requests a job from Yerbie to indicate that it is being processed by a worker. Yerbie will mark this
-job as running, and the worker must tell Yerbie that it has finished with the job, otherwise Yerbie will enqueue
+This requests a job from Yerbie to indicate that it is being processed by a client. Yerbie will mark this
+job as running, and the client must tell Yerbie that it has finished with the job, otherwise Yerbie will enqueue
 the job again after a certain amount of time.
 
 Sample Request
 ```
-curl -X POST "localhost:5865/jobs/reserve?queue=high_priority_queue"
+  curl -X POST "localhost:5865/jobs/reserve?queue=high_priority_queue"
+```
+
+### Finish Job
+This tells Yerbie that the client has finished processing the job. This way Yerbie will not enqueue the job again.
+```
+  curl -X POST "localhost:5865/jobs/finished?jobToken=9c992592-fecf-4f0c-8b1e-94906f54ec7c"
 ```
 
 ## Local Development
