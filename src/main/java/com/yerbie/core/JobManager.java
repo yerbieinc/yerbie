@@ -24,8 +24,10 @@ public class JobManager {
   private static final String REDIS_RUNNING_JOBS_SORTED_SET = "running_jobs";
   private static final String REDIS_RUNNING_JOBS_DATA_SET = "running_jobs_data";
   private static final String REDIS_COMPLETED_JOBS_SET = "completed_jobs";
+
   // TODO: make this configurable.
-  private static final long FAILURE_TIMEOUT_SECONDS = 15;
+  private static final int FAILURE_TIMEOUT_SECONDS = 15;
+  private static final int UNACKED_RETRIES_MAX = 5;
 
   private final JedisPool jedisPool;
   private final JobSerializer jobSerializer;
@@ -64,7 +66,7 @@ public class JobManager {
         transaction.hset(
             REDIS_DELAYED_JOBS_DATA_SET,
             jobToken,
-            jobSerializer.serializeJob(new JobData(jobPayload, delaySeconds, queue, jobToken)));
+            jobSerializer.serializeJob(new JobData(jobPayload, delaySeconds, queue, jobToken, 0)));
         transaction.exec();
       } catch (IOException ex) {
         LOGGER.error("Unable to serialize job into jobData.", ex);
@@ -146,7 +148,10 @@ public class JobManager {
         transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
         transaction.exec();
 
-        LOGGER.debug("Removed job {} from ready job queue {}", jobData.getJobToken(), queue);
+        LOGGER.info(
+            "Removed job {} from ready job queue {} for job execution.",
+            jobData.getJobToken(),
+            queue);
         return Optional.of(jobData);
       } catch (IOException ex) {
         LOGGER.error("Failed to deserialize jobData {}, removing bad job data.", serializedJob, ex);
@@ -218,8 +223,6 @@ public class JobManager {
    * to process the job. We then move the job into the ready set again. There's a potential infinite
    * loop, but if the client can pull jobs then they should also be able to mark jobs as complete.
    * Only call this if you have the parent scheduler lock.
-   *
-   * <p>// TODO add max amount of times they can be enqueued into the ready set again.
    */
   public boolean handleJobsNotMarkedAsComplete(long epochSecondsMax) {
     LOGGER.info("Scanning for jobs not marked as complete at {}", epochSecondsMax);
@@ -250,16 +253,40 @@ public class JobManager {
       try {
         JobData jobData = jobSerializer.deserializeJob(serializedJobData);
 
+        if (jobData.getUnackedRetries() + 1 == UNACKED_RETRIES_MAX) {
+          LOGGER.info(
+              "Job with token {} in queue {} has reached max unacked retries and will be removed.",
+              jobData.getJobToken(),
+              jobData.getQueue());
+
+          Transaction transaction = jedis.multi();
+          transaction.hdel(REDIS_RUNNING_JOBS_DATA_SET, jobToken);
+          transaction.zrem(REDIS_RUNNING_JOBS_SORTED_SET, jobToken);
+          transaction.exec();
+          return false;
+        }
+
         LOGGER.info(
-            "Moving back job with token {} into queue {}",
+            "Moving back job with token {} into queue {}. It has now been retried {} times.",
             jobData.getJobToken(),
-            jobData.getQueue());
+            jobData.getQueue(),
+            jobData.getUnackedRetries() + 1);
+
+        String newSerializedJobData =
+            jobSerializer.serializeJob(
+                new JobData(
+                    jobData.getJobPayload(),
+                    jobData.getDelaySeconds(),
+                    jobData.getQueue(),
+                    jobData.getJobToken(),
+                    jobData.getUnackedRetries() + 1));
 
         Transaction transaction = jedis.multi();
         transaction.rpush(
-            String.format(REDIS_READY_JOBS_FORMAT_STRING, jobData.getQueue()), serializedJobData);
-        transaction.zrem(REDIS_RUNNING_JOBS_SORTED_SET, jobToken);
+            String.format(REDIS_READY_JOBS_FORMAT_STRING, jobData.getQueue()),
+            newSerializedJobData);
         transaction.hdel(REDIS_RUNNING_JOBS_DATA_SET, jobToken);
+        transaction.zrem(REDIS_RUNNING_JOBS_SORTED_SET, jobToken);
         transaction.exec();
 
         return true;
@@ -268,8 +295,10 @@ public class JobManager {
             "Could not deserialize job from running job set {}, removing job data",
             serializedJobData,
             ex);
-        jedis.zrem(REDIS_RUNNING_JOBS_SORTED_SET, serializedJobData);
-        jedis.unwatch();
+        Transaction transaction = jedis.multi();
+        transaction.hdel(REDIS_RUNNING_JOBS_DATA_SET, jobToken);
+        transaction.zrem(REDIS_RUNNING_JOBS_SORTED_SET, jobToken);
+        transaction.exec();
         return true;
       }
     }

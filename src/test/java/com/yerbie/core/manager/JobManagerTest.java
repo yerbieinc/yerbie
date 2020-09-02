@@ -1,7 +1,6 @@
 package com.yerbie.core.manager;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
 import com.google.common.collect.ImmutableList;
@@ -66,7 +65,7 @@ public class JobManagerTest {
   @Test
   public void testReserveJobWhenAvailable() throws Exception {
     when(mockJedis.exists("ready_jobs_queue")).thenReturn(true);
-    JobData expectedJobData = new JobData("payload", 1, "queue", "jobToken");
+    JobData expectedJobData = new JobData("payload", 1, "queue", "jobToken", 0);
 
     when(mockJedis.lrange("ready_jobs_queue", 0, 0)).thenReturn(ImmutableList.of("JOB_DATA"));
     when(mockJobSerializer.deserializeJob("JOB_DATA")).thenReturn(expectedJobData);
@@ -164,13 +163,53 @@ public class JobManagerTest {
     when(mockJedis.hget("running_jobs_data", jobToken)).thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
     when(mockJobSerializer.deserializeJob(StubData.SAMPLE_JOB_DATA_STRING))
         .thenReturn(StubData.SAMPLE_JOB_DATA);
+    when(mockJobSerializer.serializeJob(StubData.SAMPLE_JOB_DATA_WITH_RETRY))
+        .thenReturn(StubData.SAMPLE_JOB_DATA_STRING_WITH_RETRY);
 
     assertTrue(jobManager.handleJobsNotMarkedAsComplete(10));
 
     verify(mockJedis).multi();
-    verify(mockTransaction).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING);
+    verify(mockTransaction).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING_WITH_RETRY);
     verify(mockTransaction).zrem("running_jobs", jobToken);
     verify(mockTransaction).hdel("running_jobs_data", jobToken);
+    verify(mockTransaction).exec();
+  }
+
+  @Test
+  public void testDeserializableRemovesBadData() throws Exception {
+    String jobToken = StubData.SAMPLE_JOB_DATA.getJobToken();
+    when(mockJedis.zrangeByScore("running_jobs", 0, 10, 0, 1))
+        .thenReturn(ImmutableSet.of(jobToken));
+    when(mockJedis.sismember("completed_jobs", jobToken)).thenReturn(false);
+
+    when(mockJedis.hget("running_jobs_data", jobToken)).thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
+    when(mockJobSerializer.deserializeJob(StubData.SAMPLE_JOB_DATA_STRING))
+        .thenThrow(new IOException("oops!"));
+
+    assertTrue(jobManager.handleJobsNotMarkedAsComplete(10));
+
+    verify(mockJedis).multi();
+    verify(mockTransaction).hdel("running_jobs_data", jobToken);
+    verify(mockTransaction).zrem("running_jobs", jobToken);
+    verify(mockTransaction).exec();
+  }
+
+  @Test
+  public void testHitsMaxRetryDoesntEnqueue() throws Exception {
+    String jobToken = StubData.SAMPLE_JOB_DATA.getJobToken();
+    when(mockJedis.zrangeByScore("running_jobs", 0, 10, 0, 1))
+        .thenReturn(ImmutableSet.of(jobToken));
+    when(mockJedis.sismember("completed_jobs", jobToken)).thenReturn(false);
+    when(mockJedis.hget("running_jobs_data", jobToken))
+        .thenReturn(StubData.SAMPLE_JOB_DATA_STRING_WITH_4_RETRIES);
+    when(mockJobSerializer.deserializeJob(StubData.SAMPLE_JOB_DATA_STRING_WITH_4_RETRIES))
+        .thenReturn(StubData.SAMPLE_JOB_DATA_WITH_4_RETRIES);
+
+    assertFalse(jobManager.handleJobsNotMarkedAsComplete(10));
+
+    verify(mockJedis).multi();
+    verify(mockTransaction).hdel("running_jobs_data", jobToken);
+    verify(mockTransaction).zrem("running_jobs", jobToken);
     verify(mockTransaction).exec();
   }
 }
