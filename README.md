@@ -7,11 +7,11 @@ The following describes the Yerbie API with sample requests with which client li
 ### Create Job
 This creates a job to be scheduled by Yerbie for a certain delay.
 
-Parameters:
-delaySeconds - amount of seconds to delay the job execution for
-jobData - serialized string of job payload
-queue - queue name for which this job should go to.
-jobToken - the client generated job token
+Parameters:  
+delaySeconds - amount of seconds to delay the job execution for  
+jobData - serialized string of job payload  
+queue - queue name for which this job should go to.  
+jobToken - the client generated job token  
 
 Sample Request
 ```

@@ -1,6 +1,6 @@
-## Yerbie Planned Improvements
+# Yerbie Planned Improvements
 
-# Scheduler Sharding
+## Scheduler Sharding
 Right now, when a client schedules a job, all of the jobs go into one place in Redis. As more and more jobs get added into the scheduler,
 performance will naturally degrade because scanning through the sorted set is O(logn). Therefore, it makes sense to shard the schedulers.
 Every time a client requests to add a scheduled job, we can add it to one of n schedulers, that way the effects of scanning through jobs decreases.
@@ -8,7 +8,7 @@ Every time a client requests to add a scheduled job, we can add it to one of n s
 That is, we should have a number of schedulers, that we can add or subtract dynamically. Ultimately though, they will all share the same Redis instance
 so the bottleneck at the end will become Redis.
 
-# Scheduler Scanning Improvements
+## Scheduler Scanning
 Right now, we just simply use a sorted set sorted by timestamp in order to figure out the jobs that should be triggered.
 This is easy to do and simple to implement. However, if we decide to forego accuracy and instead make it accurate
 to the second, then we could bucket all jobs to the nearest second and insert the bucket timestamp.
