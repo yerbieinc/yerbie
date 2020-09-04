@@ -13,9 +13,9 @@ import org.slf4j.LoggerFactory;
  * This is the main thread which scans for jobs ready to be scheduled and added to a queue ready to
  * be processed by workers, as well as finds jobs which did not get marked as complete.
  */
-public class JobScheduler implements Managed {
+public class JobSchedulerHandler implements Managed {
   private static final long SLEEP_SECONDS = 1;
-  private static final Logger LOGGER = LoggerFactory.getLogger(JobScheduler.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(JobSchedulerHandler.class);
 
   private final ScheduledExecutorService executorService;
   private final JobManager jobManager;
@@ -25,7 +25,7 @@ public class JobScheduler implements Managed {
   private boolean isParent;
   private boolean wasParent;
 
-  public JobScheduler(
+  public JobSchedulerHandler(
       JobManager jobManager,
       Clock clock,
       Locking locking,

@@ -15,16 +15,16 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
 @RunWith(MockitoJUnitRunner.class)
-public class JobSchedulerTest {
+public class JobSchedulerHandlerTest {
   @Mock Locking mockLocking;
   @Mock JobManager mockJobManager;
   Clock clock = Clock.fixed(StubData.AUGUST_ONE_INSTANT, ZoneId.systemDefault());
-  JobScheduler jobScheduler;
+  JobSchedulerHandler jobSchedulerHandler;
 
   @Before
   public void setUp() {
-    jobScheduler =
-        new JobScheduler(
+    jobSchedulerHandler =
+        new JobSchedulerHandler(
             mockJobManager, clock, mockLocking, Executors.newSingleThreadScheduledExecutor());
   }
 
@@ -32,7 +32,7 @@ public class JobSchedulerTest {
   public void testDoesntDoWorkIfNotParent() {
     when(mockLocking.isParent()).thenReturn(false);
 
-    assertFalse(jobScheduler.doWork());
+    assertFalse(jobSchedulerHandler.doWork());
 
     verify(mockJobManager, never())
         .handleJobsNotMarkedAsComplete(StubData.AUGUST_ONE_INSTANT.getEpochSecond());
@@ -48,7 +48,7 @@ public class JobSchedulerTest {
     when(mockJobManager.handleJobsNotMarkedAsComplete(StubData.AUGUST_ONE_INSTANT.getEpochSecond()))
         .thenReturn(true);
 
-    assertTrue(jobScheduler.doWork());
+    assertTrue(jobSchedulerHandler.doWork());
 
     verify(mockJobManager)
         .handleJobsNotMarkedAsComplete(StubData.AUGUST_ONE_INSTANT.getEpochSecond());
@@ -63,7 +63,7 @@ public class JobSchedulerTest {
     when(mockJobManager.handleJobsNotMarkedAsComplete(StubData.AUGUST_ONE_INSTANT.getEpochSecond()))
         .thenReturn(false);
 
-    assertFalse(jobScheduler.doWork());
+    assertFalse(jobSchedulerHandler.doWork());
 
     verify(mockJobManager)
         .handleJobsNotMarkedAsComplete(StubData.AUGUST_ONE_INSTANT.getEpochSecond());

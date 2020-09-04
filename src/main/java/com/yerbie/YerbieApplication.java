@@ -41,7 +41,7 @@ public class YerbieApplication extends Application<YerbieConfiguration> {
     environment
         .lifecycle()
         .manage(
-            new JobScheduler(
+            new JobSchedulerHandler(
                 jobManager,
                 Clock.systemUTC(),
                 locking,
