@@ -13,10 +13,10 @@ public class ScheduleJobRequestTest {
 
   private final ObjectMapper objectMapper = Jackson.newObjectMapper();
   private static final String JSON_SCHEDULE_JOB_REQUEST =
-      "{\"delaySeconds\":100,\"jobData\":\"jobData\",\"queue\":\"jobQueue\"}";
+      "{\"delaySeconds\":100,\"jobData\":\"jobData\",\"queue\":\"jobQueue\",\"jobToken\":\"jobToken\"}";
 
   private static final ScheduleJobRequest SCHEDULE_JOB_REQUEST =
-      new ScheduleJobRequest(100, "jobData", "jobQueue");
+      new ScheduleJobRequest(100, "jobData", "jobQueue", "jobToken");
 
   @Test
   public void testSerialize() throws Exception {

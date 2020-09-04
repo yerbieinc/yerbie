@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.yerbie.core.JobManager;
+import com.yerbie.core.exception.DuplicateJobException;
 import com.yerbie.core.job.JobData;
 import com.yerbie.core.job.JobSerializer;
 import com.yerbie.stub.StubData;
@@ -44,13 +45,21 @@ public class JobManagerTest {
   @Test
   public void testCreateJob() throws Exception {
     when(mockJobSerializer.serializeJob(any())).thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
+    when(mockJedis.hexists("delayed_jobs_data", "jobToken")).thenReturn(false);
 
-    jobManager.createJob(10, "JOB_PAYLOAD", "queue");
+    jobManager.createJob(10, "JOB_PAYLOAD", "queue", "jobToken");
 
     verify(mockJedis).multi();
     verify(mockTransaction).zadd(eq("delayed_jobs"), eq(1596318750.0), anyString(), any());
     verify(mockTransaction)
         .hset(eq("delayed_jobs_data"), anyString(), eq(StubData.SAMPLE_JOB_DATA_STRING));
+  }
+
+  @Test(expected = DuplicateJobException.class)
+  public void testCreateJobDuplicate() throws Exception {
+    when(mockJedis.hexists("delayed_jobs_data", "jobToken")).thenReturn(true);
+
+    jobManager.createJob(10, "JOB_PAYLOAD", "queue", "jobToken");
   }
 
   @Test

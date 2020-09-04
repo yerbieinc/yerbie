@@ -6,6 +6,8 @@ import com.yerbie.api.ReserveJobResponse;
 import com.yerbie.api.ScheduleJobRequest;
 import com.yerbie.api.ScheduleJobResponse;
 import com.yerbie.core.JobManager;
+import com.yerbie.core.exception.DuplicateJobException;
+import com.yerbie.core.exception.YerbieWebException;
 import com.yerbie.stub.StubData;
 import java.util.Optional;
 import junit.framework.TestCase;
@@ -27,10 +29,22 @@ public class JobResourceTest extends TestCase {
   }
 
   @Test
-  public void testScheduleJob() {
-    when(jobManager.createJob(100, "jobData", "jobQueue")).thenReturn("testToken");
+  public void testScheduleJob() throws Exception {
+    when(jobManager.createJob(100, "jobData", "jobQueue", "jobToken")).thenReturn("testToken");
 
-    ScheduleJobRequest scheduleJobRequest = new ScheduleJobRequest(100, "jobData", "jobQueue");
+    ScheduleJobRequest scheduleJobRequest =
+        new ScheduleJobRequest(100, "jobData", "jobQueue", "jobToken");
+    ScheduleJobResponse jobResponse = jobResource.scheduleJob(scheduleJobRequest);
+    assertEquals("testToken", jobResponse.getJobToken());
+  }
+
+  @Test(expected = YerbieWebException.class)
+  public void testScheduleJobDuplicate() throws Exception {
+    when(jobManager.createJob(100, "jobData", "jobQueue", "jobToken"))
+        .thenThrow(new DuplicateJobException("jobToken"));
+
+    ScheduleJobRequest scheduleJobRequest =
+        new ScheduleJobRequest(100, "jobData", "jobQueue", "jobToken");
     ScheduleJobResponse jobResponse = jobResource.scheduleJob(scheduleJobRequest);
     assertEquals("testToken", jobResponse.getJobToken());
   }

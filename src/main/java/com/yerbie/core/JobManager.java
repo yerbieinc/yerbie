@@ -1,5 +1,6 @@
 package com.yerbie.core;
 
+import com.yerbie.core.exception.DuplicateJobException;
 import com.yerbie.core.exception.SerializationException;
 import com.yerbie.core.job.JobData;
 import com.yerbie.core.job.JobSerializer;
@@ -8,7 +9,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -45,9 +45,8 @@ public class JobManager {
    * <p>Here the job data is explicitly decoupled from the sorted set because the data in the sorted
    * set should only contain metadata about the job and not the job payload itself.
    */
-  public String createJob(long delaySeconds, String jobPayload, String queue) {
-    String jobToken = UUID.randomUUID().toString();
-
+  public String createJob(long delaySeconds, String jobPayload, String queue, String jobToken)
+      throws DuplicateJobException {
     LOGGER.debug(
         "Adding job with token {} with delaySeconds {} into queue {}",
         jobToken,
@@ -55,7 +54,12 @@ public class JobManager {
         queue);
 
     try (Jedis jedis = jedisPool.getResource()) {
+      if (jedis.hexists(REDIS_DELAYED_JOBS_DATA_SET, jobToken)) {
+        throw new DuplicateJobException(jobToken);
+      }
+
       Transaction transaction = jedis.multi();
+
       try {
         transaction.zadd(
             REDIS_DELAYED_JOBS_SORTED_SET,

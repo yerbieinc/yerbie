@@ -11,10 +11,11 @@ Parameters:
 delaySeconds - amount of seconds to delay the job execution for
 jobData - serialized string of job payload
 queue - queue name for which this job should go to.
+jobToken - the client generated job token
 
 Sample Request
 ```
-  curl -H "Content-Type: application/json" -X POST -d '{"jobData":"JOB_DATA","delaySeconds":5,"queue":"high_priority_queue"}' localhost:5865/jobs/schedule 
+  curl -H "Content-Type: application/json" -X POST -d '{"jobData":"JOB_DATA","delaySeconds":5,"queue":"high_priority_queue","jobToken":"token"}' localhost:5865/jobs/schedule 
 ```
 
 ### Reserve Job
