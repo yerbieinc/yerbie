@@ -44,10 +44,10 @@ public class JobResource {
   }
 
   @POST
-  @Path("/reserve")
+  @Path("/reserve/{queue}")
   @Produces("application/json")
   @Timed
-  public ReserveJobResponse reserveJob(@QueryParam("queue") String jobQueue) {
+  public ReserveJobResponse reserveJob(@PathParam("queue") String jobQueue) {
     return jobManager
         .reserveJob(jobQueue)
         .map(
