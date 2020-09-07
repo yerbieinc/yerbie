@@ -58,6 +58,10 @@ public class JobManager {
         throw new DuplicateJobException(jobToken);
       }
 
+      if (jedis.hexists(REDIS_RUNNING_JOBS_DATA_SET, jobToken)) {
+        throw new DuplicateJobException(jobToken);
+      }
+
       Transaction transaction = jedis.multi();
 
       try {

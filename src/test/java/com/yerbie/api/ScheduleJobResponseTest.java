@@ -12,9 +12,10 @@ import org.mockito.junit.MockitoJUnitRunner;
 public class ScheduleJobResponseTest {
 
   private final ObjectMapper objectMapper = Jackson.newObjectMapper();
-  private static final String JSON_SCHEDULE_JOB_RESPONSE = "{\"jobToken\":\"jobToken\"}";
+  private static final String JSON_SCHEDULE_JOB_RESPONSE =
+      "{\"jobToken\":\"jobToken\",\"queue\":\"queue\",\"jobData\":\"jobData\",\"delaySeconds\":10}";
   private static final ScheduleJobResponse SCHEDULE_JOB_RESPONSE =
-      new ScheduleJobResponse("jobToken");
+      new ScheduleJobResponse("jobToken", "queue", "jobData", 10);
 
   @Test
   public void testDeserialize() throws Exception {

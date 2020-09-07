@@ -4,14 +4,35 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class ScheduleJobResponse {
   private final String jobToken;
+  private final String queue;
+  private final String jobData;
+  private final long delaySeconds;
 
-  public ScheduleJobResponse(@JsonProperty("jobToken") String jobToken) {
+  public ScheduleJobResponse(
+      @JsonProperty("jobToken") String jobToken,
+      @JsonProperty("queue") String queue,
+      @JsonProperty("jobData") String jobData,
+      @JsonProperty("delaySeconds") long delaySeconds) {
     this.jobToken = jobToken;
+    this.queue = queue;
+    this.jobData = jobData;
+    this.delaySeconds = delaySeconds;
   }
 
-  @JsonProperty
   public String getJobToken() {
     return jobToken;
+  }
+
+  public String getQueue() {
+    return queue;
+  }
+
+  public String getJobData() {
+    return jobData;
+  }
+
+  public long getDelaySeconds() {
+    return delaySeconds;
   }
 
   @Override
@@ -21,11 +42,14 @@ public class ScheduleJobResponse {
 
     ScheduleJobResponse otherScheduleJobResponse = (ScheduleJobResponse) other;
 
-    return this.jobToken.equals(otherScheduleJobResponse.jobToken);
+    return this.delaySeconds == otherScheduleJobResponse.delaySeconds
+        && this.jobData.equals(otherScheduleJobResponse.jobData)
+        && this.queue.equals(otherScheduleJobResponse.queue)
+        && this.jobToken.equals(otherScheduleJobResponse.jobToken);
   }
 
   @Override
   public int hashCode() {
-    return jobToken.hashCode();
+    return jobData.hashCode() + queue.hashCode() + jobToken.hashCode();
   }
 }

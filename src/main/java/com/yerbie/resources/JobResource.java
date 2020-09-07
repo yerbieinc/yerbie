@@ -35,10 +35,13 @@ public class JobResource {
               scheduleJobRequest.getDelaySeconds(),
               scheduleJobRequest.getJobData(),
               scheduleJobRequest.getQueue(),
-              scheduleJobRequest.getJobToken()));
+              scheduleJobRequest.getJobToken()),
+          scheduleJobRequest.getQueue(),
+          scheduleJobRequest.getJobData(),
+          scheduleJobRequest.getDelaySeconds());
     } catch (DuplicateJobException ex) {
       throw new YerbieWebException(
-          String.format("Duplicate job token found for token %s", ex.getJobToken()),
+          String.format("Duplicate job token found for token %s.", ex.getJobToken()),
           HttpServletResponse.SC_BAD_REQUEST);
     }
   }

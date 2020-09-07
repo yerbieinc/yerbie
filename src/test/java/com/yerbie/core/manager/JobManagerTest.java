@@ -62,6 +62,13 @@ public class JobManagerTest {
     jobManager.createJob(10, "JOB_PAYLOAD", "queue", "jobToken");
   }
 
+  @Test(expected = DuplicateJobException.class)
+  public void testCreateJobDuplicateRunning() throws Exception {
+    when(mockJedis.hexists("running_jobs_data", "jobToken")).thenReturn(true);
+
+    jobManager.createJob(10, "JOB_PAYLOAD", "queue", "jobToken");
+  }
+
   @Test
   public void testDeleteJob() {
     jobManager.deleteJob("jobToken", "normal");
