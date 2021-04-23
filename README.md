@@ -63,3 +63,10 @@ This will only build Yerbie, but none of its dependencies.
 `docker images` -> Shows images you've built.
 
 `docker kill <container_id>` -> Kills a container. Useful for testing distributed locking mechanisms.
+
+# Deploying
+1. Create an eksctl cluster via `eksctl create cluster --name yerbie-cluster --region us-west-2 --ssh-access --ssh-public-key claudioKeyPair --managed`
+   If you want to debug what's going on, `eksctl utils describe-stacks --region=us-west-2 --cluster=yerbie-cluster`.
+2. Use `kompose` to convert `docker-compose` into Kubernetes orchestrators via `kompose convert`. TODO I should actually write the files myself!
+3. Once converted, run `kubectl apply -f redis-deployment.yaml,redis-service.yaml,web-deployment.yaml,web-service.yaml` and check your deployed containers.
+4. Once you're done, delete the cluster via `eksctl delete cluster --name yerbie-cluster --region us-west-2`.
