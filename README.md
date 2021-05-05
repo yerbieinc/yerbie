@@ -71,3 +71,7 @@ This will only build Yerbie, but none of its dependencies.
 2. Use `kompose` to convert `docker-compose` into Kubernetes orchestrators via `kompose convert`. TODO I should actually write the files myself!
 3. Once converted, run `kubectl apply -f redis-deployment.yaml,redis-service.yaml,web-deployment.yaml,web-service.yaml` and check your deployed containers.
 4. Once you're done, delete the cluster via `eksctl delete cluster --name yerbie-cluster --region us-west-2`.
+
+# Releasing
+1. Commit a tag with the format `v{n.n.n}` like, `v1.2.0`, then push.
+2. The new image will automatically be added to Dockerhub by CI.
