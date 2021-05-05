@@ -22,10 +22,11 @@ Sample Request
 This requests a job from Yerbie to indicate that it is being processed by a client. Yerbie will mark this
 job as running, and the client must tell Yerbie that it has finished with the job, otherwise Yerbie will enqueue
 the job again after a certain amount of time.
+`curl -X POST "localhost:5865/jobs/reserve/{queue_name}"`
 
 Sample Request
 ```
-  curl -X POST "localhost:5865/jobs/reserve?queue=high_priority_queue"
+  curl -X POST "localhost:5865/jobs/reserve/high_priority_queue"
 ```
 
 ### Finish Job
