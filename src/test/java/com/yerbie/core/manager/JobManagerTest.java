@@ -95,6 +95,18 @@ public class JobManagerTest {
   }
 
   @Test
+  public void testReserveJobTransactionAborted() throws Exception {
+    when(mockJedis.exists("ready_jobs_queue")).thenReturn(true);
+    JobData expectedJobData = new JobData("payload", 1, "queue", "jobToken", 0);
+
+    when(mockJedis.lrange("ready_jobs_queue", 0, 0)).thenReturn(ImmutableList.of("JOB_DATA"));
+    when(mockJobSerializer.deserializeJob("JOB_DATA")).thenReturn(expectedJobData);
+    when(mockTransaction.exec()).thenReturn(null);
+
+    assertFalse(jobManager.reserveJob("queue").isPresent());
+  }
+
+  @Test
   public void testReserveJobQueueNotExisting() throws Exception {
     when(mockJedis.exists("ready_jobs_queue")).thenReturn(false);
 
@@ -104,10 +116,9 @@ public class JobManagerTest {
   @Test
   public void testReserveJobDeserializable() throws Exception {
     when(mockJedis.exists("ready_jobs_queue")).thenReturn(true);
-
     when(mockJedis.lrange("ready_jobs_queue", 0, 0)).thenReturn(ImmutableList.of("JOB_DATA"));
-
     when(mockJobSerializer.deserializeJob("JOB_DATA")).thenThrow(new IOException("derp!"));
+    when(mockTransaction.exec()).thenReturn(ImmutableList.of());
 
     assertEquals(Optional.empty(), jobManager.reserveJob("queue"));
 

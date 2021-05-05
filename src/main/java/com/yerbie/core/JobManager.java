@@ -164,7 +164,11 @@ public class JobManager {
             ZAddParams.zAddParams().nx());
         transaction.hset(REDIS_RUNNING_JOBS_DATA_SET, jobData.getJobToken(), serializedJob);
         transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
-        transaction.exec();
+
+        if (transaction.exec() == null) {
+          // The transaction was aborted and the client needs to retry.
+          return Optional.empty();
+        }
 
         LOGGER.info(
             "Removed job {} from ready job queue {} for job execution.",
