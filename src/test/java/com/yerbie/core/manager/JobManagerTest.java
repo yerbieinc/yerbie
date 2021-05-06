@@ -3,7 +3,6 @@ package com.yerbie.core.manager;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.yerbie.core.JobManager;
 import com.yerbie.core.exception.DuplicateJobException;
@@ -83,27 +82,14 @@ public class JobManagerTest {
     when(mockJedis.exists("ready_jobs_queue")).thenReturn(true);
     JobData expectedJobData = new JobData("payload", 1, "queue", "jobToken", 0);
 
-    when(mockJedis.lrange("ready_jobs_queue", 0, 0)).thenReturn(ImmutableList.of("JOB_DATA"));
+    when(mockJedis.lpop("ready_jobs_queue")).thenReturn("JOB_DATA");
     when(mockJobSerializer.deserializeJob("JOB_DATA")).thenReturn(expectedJobData);
 
     assertEquals(expectedJobData, jobManager.reserveJob("queue").get());
 
     verify(mockJedis).multi();
-    verify(mockTransaction).lpop("ready_jobs_queue");
     verify(mockTransaction).zadd(eq("running_jobs"), eq(1596318755.0), eq("jobToken"), any());
     verify(mockTransaction).exec();
-  }
-
-  @Test
-  public void testReserveJobTransactionAborted() throws Exception {
-    when(mockJedis.exists("ready_jobs_queue")).thenReturn(true);
-    JobData expectedJobData = new JobData("payload", 1, "queue", "jobToken", 0);
-
-    when(mockJedis.lrange("ready_jobs_queue", 0, 0)).thenReturn(ImmutableList.of("JOB_DATA"));
-    when(mockJobSerializer.deserializeJob("JOB_DATA")).thenReturn(expectedJobData);
-    when(mockTransaction.exec()).thenReturn(null);
-
-    assertFalse(jobManager.reserveJob("queue").isPresent());
   }
 
   @Test
@@ -116,15 +102,10 @@ public class JobManagerTest {
   @Test
   public void testReserveJobDeserializable() throws Exception {
     when(mockJedis.exists("ready_jobs_queue")).thenReturn(true);
-    when(mockJedis.lrange("ready_jobs_queue", 0, 0)).thenReturn(ImmutableList.of("JOB_DATA"));
+    when(mockJedis.lpop("ready_jobs_queue")).thenReturn("JOB_DATA");
     when(mockJobSerializer.deserializeJob("JOB_DATA")).thenThrow(new IOException("derp!"));
-    when(mockTransaction.exec()).thenReturn(ImmutableList.of());
 
     assertEquals(Optional.empty(), jobManager.reserveJob("queue"));
-
-    verify(mockJedis).multi();
-    verify(mockTransaction).lpop("ready_jobs_queue");
-    verify(mockTransaction).exec();
   }
 
   @Test
