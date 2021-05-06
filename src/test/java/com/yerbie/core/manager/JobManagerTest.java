@@ -87,9 +87,7 @@ public class JobManagerTest {
 
     assertEquals(expectedJobData, jobManager.reserveJob("queue").get());
 
-    verify(mockJedis).multi();
-    verify(mockTransaction).zadd(eq("running_jobs"), eq(1596318755.0), eq("jobToken"), any());
-    verify(mockTransaction).exec();
+    verify(mockJedis).zadd(eq("running_jobs"), eq(1596318755.0), eq("jobToken"), any());
   }
 
   @Test
@@ -121,10 +119,8 @@ public class JobManagerTest {
 
     jobManager.handleDueJobsToBeProcessed(10);
 
-    verify(mockJedis).multi();
-    verify(mockTransaction).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING);
-    verify(mockTransaction).zrem("delayed_jobs", StubData.SAMPLE_JOB_DATA.getJobToken());
-    verify(mockTransaction).exec();
+    verify(mockJedis).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING);
+    verify(mockJedis).zrem("delayed_jobs", StubData.SAMPLE_JOB_DATA.getJobToken());
   }
 
   @Test
@@ -164,11 +160,9 @@ public class JobManagerTest {
 
     assertTrue(jobManager.handleJobsNotMarkedAsComplete(10));
 
-    verify(mockJedis).multi();
-    verify(mockTransaction).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING_WITH_RETRY);
-    verify(mockTransaction).zrem("running_jobs", jobToken);
-    verify(mockTransaction).hdel("running_jobs_data", jobToken);
-    verify(mockTransaction).exec();
+    verify(mockJedis).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING_WITH_RETRY);
+    verify(mockJedis).zrem("running_jobs", jobToken);
+    verify(mockJedis).hdel("running_jobs_data", jobToken);
   }
 
   @Test
@@ -183,10 +177,8 @@ public class JobManagerTest {
 
     assertTrue(jobManager.handleJobsNotMarkedAsComplete(10));
 
-    verify(mockJedis).multi();
-    verify(mockTransaction).hdel("running_jobs_data", jobToken);
-    verify(mockTransaction).zrem("running_jobs", jobToken);
-    verify(mockTransaction).exec();
+    verify(mockJedis).hdel("running_jobs_data", jobToken);
+    verify(mockJedis).zrem("running_jobs", jobToken);
   }
 
   @Test
@@ -201,9 +193,7 @@ public class JobManagerTest {
 
     assertFalse(jobManager.handleJobsNotMarkedAsComplete(10));
 
-    verify(mockJedis).multi();
-    verify(mockTransaction).hdel("running_jobs_data", jobToken);
-    verify(mockTransaction).zrem("running_jobs", jobToken);
-    verify(mockTransaction).exec();
+    verify(mockJedis).hdel("running_jobs_data", jobToken);
+    verify(mockJedis).zrem("running_jobs", jobToken);
   }
 }
