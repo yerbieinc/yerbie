@@ -139,14 +139,10 @@ public class JobManager {
 
       LOGGER.debug("Attempting to reserve job from queue {}", queue);
 
-      jedis.watch(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
-
       Optional<String> serializedJobOptional =
-          jedis.lrange(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue), 0, 0).stream()
-              .findFirst();
+          Optional.ofNullable(jedis.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue)));
 
       if (!serializedJobOptional.isPresent()) {
-        jedis.unwatch();
         LOGGER.debug("No jobs in ready job queue {}", queue);
         return Optional.empty();
       }
@@ -163,12 +159,7 @@ public class JobManager {
             jobData.getJobToken(),
             ZAddParams.zAddParams().nx());
         transaction.hset(REDIS_RUNNING_JOBS_DATA_SET, jobData.getJobToken(), serializedJob);
-        transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
-
-        if (transaction.exec() == null) {
-          // The transaction was aborted and the client needs to retry.
-          return Optional.empty();
-        }
+        transaction.exec();
 
         LOGGER.info(
             "Removed job {} from ready job queue {} for job execution.",
@@ -177,8 +168,6 @@ public class JobManager {
         return Optional.of(jobData);
       } catch (IOException ex) {
         LOGGER.error("Failed to deserialize jobData {}, removing bad job data.", serializedJob, ex);
-        transaction.lpop(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue));
-        transaction.exec();
         return Optional.empty();
       }
     }
