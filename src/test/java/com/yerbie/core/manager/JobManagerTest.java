@@ -44,19 +44,20 @@ public class JobManagerTest {
   @Test
   public void testCreateJob() throws Exception {
     when(mockJobSerializer.serializeJob(any())).thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
-    when(mockJedis.hexists("delayed_jobs_data", "jobToken")).thenReturn(false);
+    when(mockJedis.hexists("delayed_jobs_timestamp", "jobToken")).thenReturn(false);
 
     jobManager.createJob(10, "JOB_PAYLOAD", "queue", "jobToken");
 
     verify(mockJedis).multi();
-    verify(mockTransaction).zadd(eq("delayed_jobs"), eq(1596318750.0), anyString(), any());
     verify(mockTransaction)
-        .hset(eq("delayed_jobs_data"), anyString(), eq(StubData.SAMPLE_JOB_DATA_STRING));
+        .zadd(eq("delayed_jobs"), eq(1596318750.0), eq("delayed_jobs_1596318750"), any());
+    verify(mockTransaction).rpush("delayed_jobs_1596318750", StubData.SAMPLE_JOB_DATA_STRING);
+    verify(mockTransaction).hset("delayed_jobs_timestamp", "jobToken", "delayed_jobs_1596318750");
   }
 
   @Test(expected = DuplicateJobException.class)
   public void testCreateJobDuplicate() throws Exception {
-    when(mockJedis.hexists("delayed_jobs_data", "jobToken")).thenReturn(true);
+    when(mockJedis.hexists("delayed_jobs_timestamp", "jobToken")).thenReturn(true);
 
     jobManager.createJob(10, "JOB_PAYLOAD", "queue", "jobToken");
   }
@@ -73,7 +74,7 @@ public class JobManagerTest {
     jobManager.deleteJob("jobToken", "normal");
     verify(mockJedis).multi();
     verify(mockTransaction).zrem("delayed_jobs", "jobToken");
-    verify(mockTransaction).hdel("delayed_jobs_data", "jobToken");
+    verify(mockTransaction).hdel("delayed_jobs_timestamp", "jobToken");
     verify(mockTransaction).exec();
   }
 
@@ -109,30 +110,38 @@ public class JobManagerTest {
   @Test
   public void testHandleJobsIsSuccessful() throws Exception {
     when(mockJedis.zrangeByScore("delayed_jobs", 0, 10, 0, 1))
-        .thenReturn(ImmutableSet.of(StubData.SAMPLE_JOB_DATA.getJobToken()));
+        .thenReturn(ImmutableSet.of(StubData.AUGUST_ONE_DELAYED_ITEM_LIST));
     when(mockJobSerializer.deserializeJob(StubData.SAMPLE_JOB_DATA_STRING))
         .thenReturn(StubData.SAMPLE_JOB_DATA);
-    when(mockJedis.hget("delayed_jobs_data", StubData.SAMPLE_JOB_DATA.getJobToken()))
-        .thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
-    when(mockJedis.hexists("delayed_jobs_data", StubData.SAMPLE_JOB_DATA.getJobToken()))
-        .thenReturn(true);
+    when(mockJedis.lpop(StubData.AUGUST_ONE_DELAYED_ITEM_LIST))
+        .thenReturn(StubData.SAMPLE_JOB_DATA_STRING)
+        .thenReturn(StubData.SAMPLE_JOB_DATA_STRING)
+        .thenReturn(null);
+    when(mockJedis.exists(StubData.AUGUST_ONE_DELAYED_ITEM_LIST)).thenReturn(true);
+    when(mockJedis.llen(StubData.AUGUST_ONE_DELAYED_ITEM_LIST)).thenReturn(1L).thenReturn(0L);
 
-    jobManager.handleDueJobsToBeProcessed(10);
+    assertTrue(jobManager.handleDueJobsToBeProcessed(10));
 
-    verify(mockJedis).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING);
-    verify(mockJedis).zrem("delayed_jobs", StubData.SAMPLE_JOB_DATA.getJobToken());
+    verify(mockJedis, times(2)).watch(StubData.AUGUST_ONE_DELAYED_ITEM_LIST);
+    verify(mockJedis, times(2)).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING);
+    verify(mockJedis, times(2))
+        .hdel("delayed_jobs_timestamp", StubData.SAMPLE_JOB_DATA.getJobToken());
+    verify(mockJedis).multi();
+    verify(mockTransaction).del(StubData.AUGUST_ONE_DELAYED_ITEM_LIST);
+    verify(mockTransaction).zrem("delayed_jobs", StubData.AUGUST_ONE_DELAYED_ITEM_LIST);
+    verify(mockTransaction).exec();
+    verify(mockJedis).unwatch();
   }
 
   @Test
   public void testHandleJobsButNoToken() throws Exception {
     when(mockJedis.zrangeByScore("delayed_jobs", 0, 10, 0, 1))
-        .thenReturn(ImmutableSet.of(StubData.SAMPLE_JOB_DATA.getJobToken()));
-    when(mockJedis.hexists("delayed_jobs_data", StubData.SAMPLE_JOB_DATA.getJobToken()))
-        .thenReturn(false);
+        .thenReturn(ImmutableSet.of(StubData.AUGUST_ONE_DELAYED_ITEM_LIST));
+    when(mockJedis.exists(StubData.AUGUST_ONE_DELAYED_ITEM_LIST)).thenReturn(false);
 
-    jobManager.handleDueJobsToBeProcessed(10);
+    assertFalse(jobManager.handleDueJobsToBeProcessed(10));
 
-    verify(mockJedis).zrem("delayed_jobs", StubData.SAMPLE_JOB_DATA.getJobToken());
+    verify(mockJedis).zrem("delayed_jobs", StubData.AUGUST_ONE_DELAYED_ITEM_LIST);
   }
 
   @Test

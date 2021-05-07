@@ -19,10 +19,11 @@ import redis.clients.jedis.params.ZAddParams;
 public class JobManager {
   private static final Logger LOGGER = LoggerFactory.getLogger(JobManager.class);
   private static final String REDIS_DELAYED_JOBS_SORTED_SET = "delayed_jobs";
-  private static final String REDIS_DELAYED_JOBS_DATA_SET = "delayed_jobs_data";
+  private static final String REDIS_DELAYED_JOBS_TIMESTAMP_SET = "delayed_jobs_timestamp";
   private static final String REDIS_READY_JOBS_FORMAT_STRING = "ready_jobs_%s";
   private static final String REDIS_RUNNING_JOBS_SORTED_SET = "running_jobs";
   private static final String REDIS_RUNNING_JOBS_DATA_SET = "running_jobs_data";
+  private static final String DELAYED_ITEMS_LIST = "delayed_jobs_%d";
 
   // TODO: make this configurable.
   private static final int FAILURE_TIMEOUT_SECONDS = 15;
@@ -54,7 +55,7 @@ public class JobManager {
         queue);
 
     try (Jedis jedis = jedisPool.getResource()) {
-      if (jedis.hexists(REDIS_DELAYED_JOBS_DATA_SET, jobToken)) {
+      if (jedis.hexists(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken)) {
         throw new DuplicateJobException(jobToken);
       }
 
@@ -64,16 +65,19 @@ public class JobManager {
 
       Transaction transaction = jedis.multi();
 
+      Long timestampEpochSeconds = Instant.now(clock).plusSeconds(delaySeconds).getEpochSecond();
+      String timestampBucketName = String.format(DELAYED_ITEMS_LIST, timestampEpochSeconds);
+
       try {
         transaction.zadd(
             REDIS_DELAYED_JOBS_SORTED_SET,
             Instant.now(clock).plusSeconds(delaySeconds).getEpochSecond(),
-            jobToken,
+            timestampBucketName,
             ZAddParams.zAddParams().nx());
-        transaction.hset(
-            REDIS_DELAYED_JOBS_DATA_SET,
-            jobToken,
+        transaction.rpush(
+            timestampBucketName,
             jobSerializer.serializeJob(new JobData(jobPayload, delaySeconds, queue, jobToken, 0)));
+        transaction.hset(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken, timestampBucketName);
         transaction.exec();
       } catch (IOException ex) {
         LOGGER.error("Unable to serialize job into jobData.", ex);
@@ -95,7 +99,7 @@ public class JobManager {
       LOGGER.debug("Deleting job with token {} from queue {}", jobToken, queue);
 
       transaction.zrem(REDIS_DELAYED_JOBS_SORTED_SET, jobToken);
-      transaction.hdel(REDIS_DELAYED_JOBS_DATA_SET, jobToken);
+      transaction.hdel(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken);
 
       LOGGER.debug("Deleted job with token {} from queue {}", jobToken, queue);
 
@@ -171,6 +175,19 @@ public class JobManager {
     }
   }
 
+  private void cleanupListIfNeeded(String listKey, Jedis jedis) {
+    jedis.watch(listKey);
+
+    if (jedis.llen(listKey) == 0) {
+      Transaction transaction = jedis.multi();
+      transaction.del(listKey);
+      transaction.zrem(REDIS_DELAYED_JOBS_SORTED_SET, listKey);
+      transaction.exec();
+    } else {
+      jedis.unwatch();
+    }
+  }
+
   /**
    * Scans for jobs that are ready to run and enqueues them into the appropriate queue. This should
    * only be called by the master scheduler process, and not multiple processes, otherwise this may
@@ -183,42 +200,51 @@ public class JobManager {
     LOGGER.info("Scanning jobs to be processed earlier than {}", epochSecondsMax);
 
     try (Jedis jedis = jedisPool.getResource()) {
-      Set<String> applicableJobTokens =
+      Set<String> listsToProcess =
           jedis.zrangeByScore(REDIS_DELAYED_JOBS_SORTED_SET, 0, epochSecondsMax, 0, 1);
 
-      if (applicableJobTokens.isEmpty()) {
+      if (listsToProcess.isEmpty()) {
         return false;
       }
 
-      String jobToken = applicableJobTokens.stream().findFirst().get();
+      String redisTimestampList = listsToProcess.stream().findFirst().get();
 
-      if (!jedis.hexists(REDIS_DELAYED_JOBS_DATA_SET, jobToken)) {
-        LOGGER.error("No job data found for token {}, removing token.", jobToken);
-        jedis.zrem(REDIS_DELAYED_JOBS_SORTED_SET, jobToken);
+      if (!jedis.exists(redisTimestampList)) {
+        LOGGER.error("No list found for timestamp {}, removing token.", redisTimestampList);
+        jedis.zrem(REDIS_DELAYED_JOBS_SORTED_SET, redisTimestampList);
         return false;
       }
 
-      String serializedJobData = jedis.hget(REDIS_DELAYED_JOBS_DATA_SET, jobToken);
+      boolean hadWork = false;
 
-      try {
-        JobData jobData = jobSerializer.deserializeJob(serializedJobData);
+      while (true) {
+        Optional<String> serializedJobData = Optional.ofNullable(jedis.lpop(redisTimestampList));
 
-        jedis.rpush(
-            String.format(REDIS_READY_JOBS_FORMAT_STRING, jobData.getQueue()), serializedJobData);
-        jedis.zrem(REDIS_DELAYED_JOBS_SORTED_SET, jobToken);
-        jedis.hdel(REDIS_DELAYED_JOBS_DATA_SET, jobToken);
+        if (!serializedJobData.isPresent()) {
+          break;
+        }
 
-        LOGGER.info(
-            "Moved job with token {} into queue {}", jobData.getJobToken(), jobData.getQueue());
+        hadWork = true;
 
-        return true;
-      } catch (IOException ex) {
-        LOGGER.error(
-            "Failed to deserialize jobData {}, removing bad job data.", serializedJobData, ex);
-        jedis.zrem(REDIS_DELAYED_JOBS_SORTED_SET, serializedJobData);
-        jedis.hdel(REDIS_DELAYED_JOBS_DATA_SET, jobToken);
-        return true;
+        try {
+          JobData jobData = jobSerializer.deserializeJob(serializedJobData.get());
+
+          jedis.rpush(
+              String.format(REDIS_READY_JOBS_FORMAT_STRING, jobData.getQueue()),
+              serializedJobData.get());
+          jedis.hdel(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobData.getJobToken());
+
+          LOGGER.info(
+              "Moved job with token {} into queue {}", jobData.getJobToken(), jobData.getQueue());
+
+          cleanupListIfNeeded(redisTimestampList, jedis);
+        } catch (IOException ex) {
+          LOGGER.error(
+              "Failed to deserialize jobData {}, removed bad job data.", serializedJobData, ex);
+        }
       }
+
+      return hadWork;
     }
   }
 
