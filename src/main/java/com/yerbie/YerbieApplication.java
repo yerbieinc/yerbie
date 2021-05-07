@@ -8,17 +8,25 @@ import io.dropwizard.Application;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Clock;
+import java.util.Properties;
 import java.util.concurrent.Executors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 
 public class YerbieApplication extends Application<YerbieConfiguration> {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(YerbieApplication.class);
+
   private static final String ACQUIRE_LOCK_LUA_SCRIPT_FILENAME = "acquire_lock.lua";
   private static final String HAS_LOCK_LUA_SCRIPT_FILENAME = "has_lock.lua";
+  private static final String APPLICATION_PROPERTIES_FILENAME = "application.properties";
 
   public static void main(String[] args) throws Exception {
     new YerbieApplication().run(args);
@@ -46,6 +54,8 @@ public class YerbieApplication extends Application<YerbieConfiguration> {
                 Clock.systemUTC(),
                 locking,
                 Executors.newSingleThreadScheduledExecutor()));
+
+    LOGGER.info("Yerbie version={} started.", getYerbieVersion());
   }
 
   private JedisPool buildJedisPool(RedisConfiguration endpointConfiguration) {
@@ -62,5 +72,18 @@ public class YerbieApplication extends Application<YerbieConfiguration> {
         String.format(
             "%s-%d", InetAddress.getLocalHost().getHostName(), ProcessHandle.current().pid());
     return new Locking(jedisPool, lockKeyValue, acquireScriptSha, hasScriptSha);
+  }
+
+  private String getYerbieVersion() {
+    Properties props = new Properties();
+
+    try (InputStream inputStream =
+        this.getClass().getClassLoader().getResourceAsStream(APPLICATION_PROPERTIES_FILENAME)) {
+      props.load(inputStream);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
+    return props.getProperty("yerbie.version");
   }
 }
