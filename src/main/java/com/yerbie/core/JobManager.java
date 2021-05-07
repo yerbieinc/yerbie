@@ -40,11 +40,13 @@ public class JobManager {
   }
 
   /**
-   * Creates a job by adding job token with a delay in Redis' sorted set and setting the job token
-   * to the job data in Redis.
+   * Creates a job by adding the timestamp to Redis' sorted set as well as the job data to a list
+   * with the key of that timestamp.
    *
-   * <p>Here the job data is explicitly decoupled from the sorted set because the data in the sorted
-   * set should only contain metadata about the job and not the job payload itself.
+   * <p>For example, adding a timestamp of 100 will create 100 in a sorted set, as well as a list
+   * `delayed_jobs_100` whose contents are the job data.
+   *
+   * <p>All jobs due to be executed at time 100 will be located in that list.
    */
   public String createJob(long delaySeconds, String jobPayload, String queue, String jobToken)
       throws DuplicateJobException {
@@ -108,9 +110,10 @@ public class JobManager {
   }
 
   /**
-   * Marks the job as complete by adding it to the completed set.
+   * Marks the job as complete.
    *
-   * <p>The failure handler will see that it is complete, and not queue the job for retrying.
+   * <p>This way, the failure handler will no longer pick it up from the running jobs sorted set for
+   * re execution.
    */
   public boolean markJobAsComplete(String jobToken) {
     try (Jedis jedis = jedisPool.getResource()) {
@@ -131,7 +134,6 @@ public class JobManager {
 
   /**
    * Reserves a job by removing it from the ready jobs set and into the processing jobs set.
-   * debugging.
    *
    * @param queue
    */
