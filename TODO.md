@@ -7,3 +7,7 @@ Every time a client requests to add a scheduled job, we can add it to one of n s
 
 That is, we should have a number of schedulers, that we can add or subtract dynamically. Ultimately though, they will all share the same Redis instance
 so the bottleneck at the end will become Redis.
+
+
+## Redis Partitioning
+See [this article](https://redis.io/topics/cluster-tutorial).
