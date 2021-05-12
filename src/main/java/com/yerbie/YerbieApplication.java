@@ -1,5 +1,7 @@
 package com.yerbie;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.servlets.MetricsServlet;
 import com.yerbie.core.*;
 import com.yerbie.core.job.JobSerializer;
 import com.yerbie.health.YerbieHealthCheck;
@@ -23,6 +25,7 @@ import redis.clients.jedis.JedisPoolConfig;
 public class YerbieApplication extends Application<YerbieConfiguration> {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(YerbieApplication.class);
+  private static final MetricRegistry metricRegistry = new MetricRegistry();
 
   private static final String ACQUIRE_LOCK_LUA_SCRIPT_FILENAME = "acquire_lock.lua";
   private static final String HAS_LOCK_LUA_SCRIPT_FILENAME = "has_lock.lua";
@@ -44,7 +47,12 @@ public class YerbieApplication extends Application<YerbieConfiguration> {
     Locking locking = buildLock(jedisPool);
 
     environment.healthChecks().register("redis", new YerbieHealthCheck(jedisPool));
-    environment.jersey().register(new JobResource(jobManager));
+    environment.jersey().register(new JobResource(jobManager, metricRegistry));
+
+    environment
+        .admin()
+        .addServlet("metricsServlet", new MetricsServlet(metricRegistry))
+        .addMapping("/yerbieMetrics");
 
     environment
         .lifecycle()
@@ -54,7 +62,6 @@ public class YerbieApplication extends Application<YerbieConfiguration> {
                 Clock.systemUTC(),
                 locking,
                 Executors.newSingleThreadScheduledExecutor()));
-
     LOGGER.info("Yerbie version={} started.", getYerbieVersion());
   }
 

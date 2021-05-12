@@ -1,6 +1,7 @@
 package com.yerbie.resources;
 
-import com.codahale.metrics.annotation.Timed;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.yerbie.api.FinishJobResponse;
 import com.yerbie.api.ReserveJobResponse;
 import com.yerbie.api.ScheduleJobRequest;
@@ -19,17 +20,27 @@ public class JobResource {
   private static final ReserveJobResponse NO_JOB_RESPONSE =
       new ReserveJobResponse(0, null, null, null);
   private final JobManager jobManager;
+  private final MetricRegistry metricRegistry;
+  private final Timer scheduleJobTimer;
+  private final Timer reserveJobTimer;
+  private final Timer finishedJobTimer;
 
-  public JobResource(JobManager jobManager) {
+  public JobResource(JobManager jobManager, MetricRegistry metricRegistry) {
     this.jobManager = jobManager;
+    this.metricRegistry = metricRegistry;
+    this.scheduleJobTimer =
+        metricRegistry.timer(MetricRegistry.name(JobResource.class, "scheduleJob"));
+    this.reserveJobTimer =
+        metricRegistry.timer(MetricRegistry.name(JobResource.class, "reserveJob"));
+    this.finishedJobTimer =
+        metricRegistry.timer(MetricRegistry.name(JobResource.class, "finishedJob"));
   }
 
   @POST
   @Path("/schedule")
   @Produces("application/json")
-  @Timed
   public ScheduleJobResponse scheduleJob(ScheduleJobRequest scheduleJobRequest) {
-    try {
+    try (Timer.Context context = scheduleJobTimer.time()) {
       return new ScheduleJobResponse(
           jobManager.createJob(
               scheduleJobRequest.getDelaySeconds(),
@@ -49,29 +60,31 @@ public class JobResource {
   @POST
   @Path("/reserve/{queue}")
   @Produces("application/json")
-  @Timed
   public ReserveJobResponse reserveJob(@PathParam("queue") String jobQueue) {
-    return jobManager
-        .reserveJob(jobQueue)
-        .map(
-            jobData ->
-                new ReserveJobResponse(
-                    jobData.getDelaySeconds(),
-                    jobData.getJobPayload(),
-                    jobData.getQueue(),
-                    jobData.getJobToken()))
-        .orElse(NO_JOB_RESPONSE);
+    try (final Timer.Context context = reserveJobTimer.time()) {
+      return jobManager
+          .reserveJob(jobQueue)
+          .map(
+              jobData ->
+                  new ReserveJobResponse(
+                      jobData.getDelaySeconds(),
+                      jobData.getJobPayload(),
+                      jobData.getQueue(),
+                      jobData.getJobToken()))
+          .orElse(NO_JOB_RESPONSE);
+    }
   }
 
   @POST
   @Path("/finished")
   @Produces("application/json")
-  @Timed
   public FinishJobResponse markJobAsFinished(@QueryParam("jobToken") String jobToken) {
-    if (jobManager.markJobAsComplete(jobToken)) {
-      return new FinishJobResponse(jobToken);
-    }
+    try (final Timer.Context context = reserveJobTimer.time()) {
+      if (jobManager.markJobAsComplete(jobToken)) {
+        return new FinishJobResponse(jobToken);
+      }
 
-    return new FinishJobResponse(null);
+      return new FinishJobResponse(null);
+    }
   }
 }

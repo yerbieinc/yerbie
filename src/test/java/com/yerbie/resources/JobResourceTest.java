@@ -2,6 +2,7 @@ package com.yerbie.resources;
 
 import static org.mockito.Mockito.when;
 
+import com.codahale.metrics.MetricRegistry;
 import com.yerbie.api.ReserveJobResponse;
 import com.yerbie.api.ScheduleJobRequest;
 import com.yerbie.api.ScheduleJobResponse;
@@ -25,7 +26,7 @@ public class JobResourceTest extends TestCase {
 
   @Before
   public void setUp() {
-    jobResource = new JobResource(jobManager);
+    jobResource = new JobResource(jobManager, new MetricRegistry());
   }
 
   @Test
