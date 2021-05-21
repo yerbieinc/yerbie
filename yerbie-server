@@ -5,7 +5,7 @@ die() {
     exit 1
 }
 
-while :; do
+while [ $# -ne 0 ] ; do
     case $1 in
         -h|-\?|--help)
             exit
@@ -34,14 +34,9 @@ while :; do
                 die 'ERROR: "--redis-host" requires a non-empty value.'
             fi
             ;;
-        -?*)
-            printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2
-            if [ "$2" ]; then
-                shift
-            fi
-            ;;
         *)
-            break
+            printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2
+            ;;
     esac
 
     shift
