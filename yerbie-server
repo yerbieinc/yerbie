@@ -1,0 +1,50 @@
+#!/bin/sh
+
+die() {
+    printf '%s\n' "$1" >&2
+    exit 1
+}
+
+while :; do
+    case $1 in
+        -h|-\?|--help)
+            exit
+            ;;
+        -p|--yerbie-port)
+            if [ "$2" ]; then
+                YERBIE_PORT=$2
+                shift
+            else
+                die 'ERROR: "--port" requires a non-empty value.'
+            fi
+            ;;
+        -r|--redis-port)
+            if [ "$2" ]; then
+                REDIS_PORT=$2
+                shift
+            else
+                die 'ERROR: "--redis-port" requires a non-empty value.'
+            fi
+            ;;
+        -h|--redis-host)
+            if [ "$2" ]; then
+                REDIS_HOST=$2
+                shift
+            else
+                die 'ERROR: "--redis-host" requires a non-empty value.'
+            fi
+            ;;
+        -?*)
+            printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2
+            if [ "$2" ]; then
+                shift
+            fi
+            ;;
+        *)
+            break
+    esac
+
+    shift
+done
+
+YERBIE_PORT="${YERBIE_PORT:-5865}" REDIS_HOST="${REDIS_HOST:-localhost}" REDIS_PORT="${REDIS_PORT:-6379}" sh -c 'java -jar /app/yerbie-server.jar server /app/yerbie.yml'

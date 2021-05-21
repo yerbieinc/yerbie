@@ -1,14 +1,13 @@
-# TODO(claudio.wilson): Allow https here.
 server:
   type: simple
   applicationContextPath: /
   connector:
     type: http
-    port: 5865
+    port: ${YERBIE_PORT:-5865}
 
 logging:
   level: INFO
 
 redis:
-  host: redis
-  port: 6379
+  host: ${REDIS_HOST:-localhost}
+  port: ${REDIS_PORT:-6378}

@@ -1,4 +1,4 @@
-package com.yerbie.core;
+package com.yerbie;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 

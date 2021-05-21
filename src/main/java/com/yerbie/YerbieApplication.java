@@ -7,6 +7,8 @@ import com.yerbie.core.job.JobSerializer;
 import com.yerbie.health.YerbieHealthCheck;
 import com.yerbie.resources.JobResource;
 import io.dropwizard.Application;
+import io.dropwizard.configuration.EnvironmentVariableSubstitutor;
+import io.dropwizard.configuration.SubstitutingSourceProvider;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
@@ -36,7 +38,11 @@ public class YerbieApplication extends Application<YerbieConfiguration> {
   }
 
   @Override
-  public void initialize(Bootstrap<YerbieConfiguration> bootstrap) {}
+  public void initialize(Bootstrap<YerbieConfiguration> bootstrap) {
+    bootstrap.setConfigurationSourceProvider(
+        new SubstitutingSourceProvider(
+            bootstrap.getConfigurationSourceProvider(), new EnvironmentVariableSubstitutor(false)));
+  }
 
   @Override
   public void run(YerbieConfiguration configuration, Environment environment)
