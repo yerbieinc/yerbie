@@ -12,7 +12,7 @@ while [ $# -ne 0 ] ; do
             ;;
         -p|--yerbie-port)
             if [ "$2" ]; then
-                YERBIE_PORT=$2
+                YERBIE_SERVER_PORT=$2
                 shift
             else
                 die 'ERROR: "--port" requires a non-empty value.'
@@ -42,4 +42,4 @@ while [ $# -ne 0 ] ; do
     shift
 done
 
-YERBIE_PORT="${YERBIE_PORT:-5865}" REDIS_HOST="${REDIS_HOST:-localhost}" REDIS_PORT="${REDIS_PORT:-6379}" sh -c 'java -jar /app/yerbie-server.jar server /app/yerbie.yml'
+YERBIE_PORT="${YERBIE_SERVER_PORT:-5865}" REDIS_HOST="${REDIS_HOST:-localhost}" REDIS_PORT="${REDIS_PORT:-6379}" sh -c 'java -jar /app/yerbie-server.jar server /app/yerbie.yml'
