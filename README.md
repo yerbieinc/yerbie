@@ -1,8 +1,17 @@
 # Yerbie
-Job Queue and Scheduler
+Yerbie is a job queue and scheduler backed by Redis. Yerbie is used for:
+
+- Distributing work across threads or machines
+- Scheduling code to run sometime in the future
+- Retrying failures asynchronously
+
+This repository contains code for the Yerbie server.
+The Yerbie server manages job data, queues and job schedules in Redis while exposing an API for clients to interface with Yerbie.
+
+To learn more about Yerbie, go to the [official Yerbie website](https://www.yerbie.dev).
 
 ## Yerbie API
-The following describes the Yerbie API with sample requests with which client libraries interact with.
+The following describes the Yerbie API with sample HTTP requests. Client libraries will send these requests to interact with Yerbie, however client libraries are still responsible for also handing errors, serializing and deserializing job data, as well as implementing polling and running jobs from the Yerbie server.
 
 ### Create Job
 This creates a job to be scheduled by Yerbie for a certain delay.
@@ -35,43 +44,8 @@ This tells Yerbie that the client has finished processing the job. This way Yerb
   curl -X POST "localhost:5865/jobs/finished?jobToken=9c992592-fecf-4f0c-8b1e-94906f54ec7c"
 ```
 
-## Local Development
-In IntelliJ IDEA CE -> Open as Project -> build.gradle
-
-1. Install Docker.
-2. Run `docker-compose up`. This will bring up Yerbie and Redis in separate containers.
-3. `curl localhost:5865/admin/healthcheck` to run healthchecks and verify everything is working.
-
-## Connecting to the Redis Container via Redis CLI
-1. Run `docker-compose build`.
-2. Run `docker-compose up`
-3. Run `docker ps` to find the id of the redis container.
-4. Run `docker exec -it <container id> redis-cli -h redis` to connect to redis via the redis cli.
-
-
-## Building the Yerbie Image and Running it
-1. In directory root run `docker build -t yerbie:test .`
-2. run `docker run -d -p 5865:5865 yerbie:test`.
-   If you want to see the output in the same console, remove the daemon argument `-d`.
-3. Once it's running in the container, you can curl localhost:5865 to hit Yerbie.
-
-This will only build Yerbie, but none of its dependencies.
-
-# Docker Cheatsheet
-
-`docker ps` -> This shows running containers.
-
-`docker images` -> Shows images you've built.
-
-`docker kill <container_id>` -> Kills a container. Useful for testing distributed locking mechanisms.
-
-# Deploying
-1. Create an eksctl cluster via `eksctl create cluster --name yerbie-cluster --region us-west-2 --ssh-access --ssh-public-key claudioKeyPair --managed`
-   If you want to debug what's going on, `eksctl utils describe-stacks --region=us-west-2 --cluster=yerbie-cluster`.
-2. Use `kompose` to convert `docker-compose` into Kubernetes orchestrators via `kompose convert`. TODO I should actually write the files myself!
-3. Once converted, run `kubectl apply -f redis-deployment.yaml,redis-service.yaml,web-deployment.yaml,web-service.yaml` and check your deployed containers.
-4. Once you're done, delete the cluster via `eksctl delete cluster --name yerbie-cluster --region us-west-2`.
-
 # Releasing
-1. Commit a tag with the format `v{n.n.n}` like, `v1.2.0`, then push.
-2. The new image will automatically be added to Dockerhub by CI.
+To releae, commit a tag with the format `v{n.n.n}` like, `v1.2.0`, then push. The new image will automatically be built and added to Dockerhub by CI.
+
+# Local Development
+See [DEVELOPING.md](DEVELOPING.md).
