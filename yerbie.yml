@@ -10,4 +10,4 @@ logging:
 
 redis:
   host: ${REDIS_HOST:-localhost}
-  port: ${REDIS_PORT:-6378}
+  port: ${REDIS_PORT:-6379}

@@ -7,7 +7,7 @@ die() {
 
 # These variables are polluted by kubernetes, so reset them here.
 YERBIE_PORT=5865
-REDIS_HOST=localhost
+REDIS_HOST=redis
 REDIS_PORT=6379
 
 while [ $# -ne 0 ] ; do
