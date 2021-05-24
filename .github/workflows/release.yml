@@ -1,4 +1,4 @@
-name: CI to Docker Hub
+name: Release
 
 # Controls when the action will run. 
 on:
