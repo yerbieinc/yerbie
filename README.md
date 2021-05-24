@@ -1,5 +1,7 @@
 # Yerbie
 ![CI](https://github.com/yerbieinc/yerbie/actions/workflows/main-ci.yml/badge.svg)
+![Release](https://github.com/yerbieinc/yerbie/actions/workflows/release.yml/badge.svg)
+
 
 Yerbie is a job queue and scheduler backed by Redis. Yerbie is used for:
 
