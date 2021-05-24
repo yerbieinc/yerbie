@@ -78,6 +78,25 @@ This tells Yerbie that the client has finished processing the job. Yerbie will n
   {"jobToken":"token"}
 ```
 
+### Delete Job
+This will delete a job that hasn't already been put onto a queue. If the job is already on a queue, it will **not** be deleted.
+
+```
+  curl -X POST "localhost:5865/jobs/delete/{token}"
+```
+
+**Sample Request**
+
+```
+  curl -X POST "localhost:5865/jobs/delete/token"
+```
+
+**Sample Response**
+
+```
+  {"jobToken":"token"}
+```
+
 # Releasing
 To releae, commit a tag with the format `v{n.n.n}` like, `v1.2.0`, then push. The new image will automatically be built and added to Dockerhub by CI.
 
