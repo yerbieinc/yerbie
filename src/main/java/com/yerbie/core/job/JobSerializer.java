@@ -1,5 +1,6 @@
 package com.yerbie.core.job;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 
@@ -16,5 +17,17 @@ public class JobSerializer {
 
   public JobData deserializeJob(String jobData) throws IOException {
     return objectMapper.readValue(jobData, JobData.class);
+  }
+
+  public String serializeJobUnit(JobUnit jobUnit) throws IOException {
+    return objectMapper.writeValueAsString(jobUnit);
+  }
+
+  public JobUnit deserializeJobUnit(String serializedJobUnit) throws IOException {
+    return objectMapper.readValue(serializedJobUnit, JobUnit.class);
+  }
+
+  public JsonNode jobDataToJSONNode(String jobData) throws IOException {
+    return objectMapper.readTree(jobData);
   }
 }

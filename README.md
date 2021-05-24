@@ -63,13 +63,13 @@ curl -X POST "localhost:5865/jobs/reserve/{queue_name}"
 This tells Yerbie that the client has finished processing the job. Yerbie will not enqueue the job again.
 
 ```
-  curl -X POST "localhost:5865/jobs/finished?jobToken={token}"
+  curl -X POST "localhost:5865/jobs/finished/{token}"
 ```
 
 **Sample Request**
 
 ```
-  curl -X POST "localhost:5865/jobs/finished?jobToken=token"
+  curl -X POST "localhost:5865/jobs/finished/token"
 ```
 
 **Sample Response**

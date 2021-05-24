@@ -44,6 +44,9 @@ public class JobManagerTest {
   @Test
   public void testCreateJob() throws Exception {
     when(mockJobSerializer.serializeJob(any())).thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
+    when(mockJobSerializer.serializeJobUnit(any())).thenReturn(StubData.SAMPLE_JOB_UNIT_STRING);
+    when(mockJobSerializer.jobDataToJSONNode(StubData.SAMPLE_JOB_DATA_STRING))
+        .thenReturn(StubData.JOB_DATA_JSON_NODE);
     when(mockJedis.hexists("delayed_jobs_timestamp", "jobToken")).thenReturn(false);
 
     jobManager.createJob(10, "JOB_PAYLOAD", "queue", "jobToken");
@@ -52,7 +55,8 @@ public class JobManagerTest {
     verify(mockTransaction)
         .zadd(eq("delayed_jobs"), eq(1596318750.0), eq("delayed_jobs_1596318750"), any());
     verify(mockTransaction).rpush("delayed_jobs_1596318750", StubData.SAMPLE_JOB_DATA_STRING);
-    verify(mockTransaction).hset("delayed_jobs_timestamp", "jobToken", "delayed_jobs_1596318750");
+    verify(mockTransaction)
+        .hset("delayed_jobs_timestamp", "jobToken", StubData.SAMPLE_JOB_UNIT_STRING);
   }
 
   @Test(expected = DuplicateJobException.class)
@@ -70,12 +74,26 @@ public class JobManagerTest {
   }
 
   @Test
-  public void testDeleteJob() {
-    jobManager.deleteJob("jobToken", "normal");
+  public void testDeleteJob() throws Exception {
+    when(mockJedis.hexists("delayed_jobs_timestamp", "jobToken")).thenReturn(true);
+    when(mockJedis.hget("delayed_jobs_timestamp", "jobToken"))
+        .thenReturn(StubData.SAMPLE_JOB_UNIT_STRING);
+    when(mockJobSerializer.deserializeJobUnit(StubData.SAMPLE_JOB_UNIT_STRING))
+        .thenReturn(StubData.SAMPLE_JOB_UNIT);
+    when(mockJedis.llen(StubData.SAMPLE_JOB_UNIT.getTimestampBucketKey())).thenReturn(0L);
+
+    jobManager.deleteJob("jobToken");
+
+    verify(mockJedis)
+        .lrem(
+            StubData.SAMPLE_JOB_UNIT.getTimestampBucketKey(),
+            0,
+            StubData.SAMPLE_JOB_UNIT.getSerializedJobData().toString());
+    verify(mockJedis).hdel("delayed_jobs_timestamp", "jobToken");
+    verify(mockJedis).watch(StubData.SAMPLE_JOB_UNIT.getTimestampBucketKey());
     verify(mockJedis).multi();
-    verify(mockTransaction).zrem("delayed_jobs", "jobToken");
-    verify(mockTransaction).hdel("delayed_jobs_timestamp", "jobToken");
-    verify(mockTransaction).exec();
+    verify(mockTransaction).del(StubData.SAMPLE_JOB_UNIT.getTimestampBucketKey());
+    verify(mockTransaction).zrem("delayed_jobs", StubData.SAMPLE_JOB_UNIT.getTimestampBucketKey());
   }
 
   @Test
@@ -139,7 +157,7 @@ public class JobManagerTest {
         .thenReturn(ImmutableSet.of(StubData.AUGUST_ONE_DELAYED_ITEM_LIST));
     when(mockJedis.exists(StubData.AUGUST_ONE_DELAYED_ITEM_LIST)).thenReturn(false);
 
-    assertFalse(jobManager.handleDueJobsToBeProcessed(10));
+    assertTrue(jobManager.handleDueJobsToBeProcessed(10));
 
     verify(mockJedis).zrem("delayed_jobs", StubData.AUGUST_ONE_DELAYED_ITEM_LIST);
   }

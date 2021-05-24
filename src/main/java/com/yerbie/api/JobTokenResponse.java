@@ -3,11 +3,11 @@ package com.yerbie.api;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-public class FinishJobResponse {
+public class JobTokenResponse {
   private final String jobToken;
 
   @JsonCreator
-  public FinishJobResponse(@JsonProperty("jobToken") String jobToken) {
+  public JobTokenResponse(@JsonProperty("jobToken") String jobToken) {
     this.jobToken = jobToken;
   }
 
@@ -19,11 +19,11 @@ public class FinishJobResponse {
   @Override
   public boolean equals(Object other) {
     if (other == this) return true;
-    if (!(other instanceof FinishJobResponse)) return false;
+    if (!(other instanceof JobTokenResponse)) return false;
 
-    FinishJobResponse otherFinishJobResponse = (FinishJobResponse) other;
+    JobTokenResponse otherJobTokenResponse = (JobTokenResponse) other;
 
-    return this.jobToken.equals(otherFinishJobResponse.jobToken);
+    return this.jobToken.equals(otherJobTokenResponse.jobToken);
   }
 
   @Override

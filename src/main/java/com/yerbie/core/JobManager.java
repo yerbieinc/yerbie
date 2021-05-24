@@ -4,6 +4,7 @@ import com.yerbie.core.exception.DuplicateJobException;
 import com.yerbie.core.exception.SerializationException;
 import com.yerbie.core.job.JobData;
 import com.yerbie.core.job.JobSerializer;
+import com.yerbie.core.job.JobUnit;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
@@ -76,10 +77,17 @@ public class JobManager {
             Instant.now(clock).plusSeconds(delaySeconds).getEpochSecond(),
             timestampBucketName,
             ZAddParams.zAddParams().nx());
-        transaction.rpush(
-            timestampBucketName,
-            jobSerializer.serializeJob(new JobData(jobPayload, delaySeconds, queue, jobToken, 0)));
-        transaction.hset(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken, timestampBucketName);
+
+        String serializedJob =
+            jobSerializer.serializeJob(new JobData(jobPayload, delaySeconds, queue, jobToken, 0));
+
+        transaction.rpush(timestampBucketName, serializedJob);
+
+        JobUnit jobUnit =
+            new JobUnit(jobSerializer.jobDataToJSONNode(serializedJob), timestampBucketName);
+        transaction.hset(
+            REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken, jobSerializer.serializeJobUnit(jobUnit));
+
         transaction.exec();
       } catch (IOException ex) {
         LOGGER.error("Unable to serialize job into jobData.", ex);
@@ -94,18 +102,32 @@ public class JobManager {
     }
   }
 
-  public void deleteJob(String jobToken, String queue) {
+  public boolean deleteJob(String jobToken) {
     try (Jedis jedis = jedisPool.getResource()) {
-      Transaction transaction = jedis.multi();
+      if (!jedis.hexists(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken)) {
+        return false;
+      }
 
-      LOGGER.debug("Deleting job with token {} from queue {}", jobToken, queue);
+      LOGGER.debug("Deleting job with token {} from queue {}", jobToken);
 
-      transaction.zrem(REDIS_DELAYED_JOBS_SORTED_SET, jobToken);
-      transaction.hdel(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken);
+      String serializedJobUnit = jedis.hget(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken);
 
-      LOGGER.debug("Deleted job with token {} from queue {}", jobToken, queue);
+      try {
+        JobUnit jobUnit = jobSerializer.deserializeJobUnit(serializedJobUnit);
+        String listKey = jobUnit.getTimestampBucketKey();
 
-      transaction.exec();
+        jedis.lrem(listKey, 0, jobUnit.getSerializedJobData().toString());
+        jedis.hdel(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken);
+
+        cleanupListIfNeeded(listKey, jedis);
+
+        LOGGER.debug("Deleted job with token {} from queue {}", jobToken);
+      } catch (IOException ex) {
+        LOGGER.error("Failed to deserialize jobUnit.", ex);
+        jedis.hdel(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken);
+      }
+
+      return true;
     }
   }
 
@@ -214,10 +236,8 @@ public class JobManager {
       if (!jedis.exists(redisTimestampList)) {
         LOGGER.error("No list found for timestamp {}, removing token.", redisTimestampList);
         jedis.zrem(REDIS_DELAYED_JOBS_SORTED_SET, redisTimestampList);
-        return false;
+        return true;
       }
-
-      boolean hadWork = false;
 
       while (true) {
         Optional<String> serializedJobData = Optional.ofNullable(jedis.lpop(redisTimestampList));
@@ -225,8 +245,6 @@ public class JobManager {
         if (!serializedJobData.isPresent()) {
           break;
         }
-
-        hadWork = true;
 
         try {
           JobData jobData = jobSerializer.deserializeJob(serializedJobData.get());
@@ -246,7 +264,7 @@ public class JobManager {
         }
       }
 
-      return hadWork;
+      return true;
     }
   }
 

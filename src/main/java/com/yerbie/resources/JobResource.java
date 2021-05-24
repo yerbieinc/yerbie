@@ -2,7 +2,7 @@ package com.yerbie.resources;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.yerbie.api.FinishJobResponse;
+import com.yerbie.api.JobTokenResponse;
 import com.yerbie.api.ReserveJobResponse;
 import com.yerbie.api.ScheduleJobRequest;
 import com.yerbie.api.ScheduleJobResponse;
@@ -34,6 +34,19 @@ public class JobResource {
         metricRegistry.timer(MetricRegistry.name(JobResource.class, "reserveJob"));
     this.finishedJobTimer =
         metricRegistry.timer(MetricRegistry.name(JobResource.class, "finishedJob"));
+  }
+
+  @POST
+  @Path("/delete/{jobToken}")
+  @Produces("application/json")
+  public JobTokenResponse deleteJob(@PathParam("jobToken") String jobToken) {
+    try (Timer.Context context = scheduleJobTimer.time()) {
+      if (jobManager.deleteJob(jobToken)) {
+        return new JobTokenResponse(jobToken);
+      }
+
+      return new JobTokenResponse(null);
+    }
   }
 
   @POST
@@ -76,15 +89,15 @@ public class JobResource {
   }
 
   @POST
-  @Path("/finished")
+  @Path("/finished/{jobToken}")
   @Produces("application/json")
-  public FinishJobResponse markJobAsFinished(@QueryParam("jobToken") String jobToken) {
-    try (final Timer.Context context = reserveJobTimer.time()) {
+  public JobTokenResponse markJobAsFinished(@PathParam("jobToken") String jobToken) {
+    try (final Timer.Context context = finishedJobTimer.time()) {
       if (jobManager.markJobAsComplete(jobToken)) {
-        return new FinishJobResponse(jobToken);
+        return new JobTokenResponse(jobToken);
       }
 
-      return new FinishJobResponse(null);
+      return new JobTokenResponse(null);
     }
   }
 }

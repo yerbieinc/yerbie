@@ -2,6 +2,7 @@ package com.yerbie.core.job;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Objects;
 
 public class JobData {
   final String jobPayload;
@@ -50,28 +51,19 @@ public class JobData {
   }
 
   @Override
-  public boolean equals(Object other) {
-    if (other == this) return true;
-    if (!(other instanceof JobData)) return false;
-
-    JobData otherJobData = (JobData) other;
-
-    return this.delaySeconds == otherJobData.delaySeconds
-        && this.jobPayload.equals(otherJobData.jobPayload)
-        && this.queue.equals(otherJobData.queue)
-        && this.jobToken.equals(otherJobData.jobToken)
-        && this.unackedRetries == otherJobData.unackedRetries;
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    JobData jobData = (JobData) o;
+    return delaySeconds == jobData.delaySeconds
+        && unackedRetries == jobData.unackedRetries
+        && jobPayload.equals(jobData.jobPayload)
+        && queue.equals(jobData.queue)
+        && jobToken.equals(jobData.jobToken);
   }
 
   @Override
   public int hashCode() {
-    int result = 1;
-    int prime = 31;
-    result = prime * result + jobPayload.hashCode();
-    result = prime * result + queue.hashCode();
-    result = prime * result + jobToken.hashCode();
-    result = prime * result + Long.valueOf(delaySeconds).intValue();
-    result = prime * result + Long.valueOf(unackedRetries).intValue();
-    return result;
+    return Objects.hash(jobPayload, delaySeconds, queue, jobToken, unackedRetries);
   }
 }
