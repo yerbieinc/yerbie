@@ -12,8 +12,8 @@ plugins {
     id "com.diffplug.gradle.spotless" version "4.3.0"
 }
 
-group 'org.yerbie'
-version '0.0.1'
+group 'dev.yerbie'
+version '1.0.0'
 
 sourceCompatibility = 1.9
 
@@ -54,4 +54,4 @@ processResources {
             "yerbie_version": project.property('version')
     ]
 }
-mainClassName = 'com.yerbie.YerbieApplication'
+mainClassName = 'dev.yerbie.YerbieApplication'
