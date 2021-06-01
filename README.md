@@ -101,8 +101,5 @@ This will delete a job that hasn't already been put onto a queue. If the job is 
   {"jobToken":"token"}
 ```
 
-# Releasing
-To releae, commit a tag with the format `v{n.n.n}` like, `v1.2.0`, then push. The new image will automatically be built and added to Dockerhub by CI.
-
 # Local Development
 See [DEVELOPING.md](DEVELOPING.md).

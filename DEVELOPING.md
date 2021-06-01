@@ -28,3 +28,6 @@ This will only build Yerbie, but none of its dependencies.
 `docker images` -> Shows images you've built.
 
 `docker kill <container_id>` -> Kills a container. Useful for testing distributed locking mechanisms.
+
+# Releasing
+To release, commit a tag with the format `v{n.n.n}` like, `v1.2.0`, then push. The new image will automatically be built and added to Dockerhub by CI.
