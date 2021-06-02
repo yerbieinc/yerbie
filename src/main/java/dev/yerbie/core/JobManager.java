@@ -108,7 +108,7 @@ public class JobManager {
         return false;
       }
 
-      LOGGER.debug("Deleting job with token {} from queue {}", jobToken);
+      LOGGER.debug("Deleting job with token {}", jobToken);
 
       String serializedJobUnit = jedis.hget(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken);
 
@@ -121,7 +121,7 @@ public class JobManager {
 
         cleanupListIfNeeded(listKey, jedis);
 
-        LOGGER.debug("Deleted job with token {} from queue {}", jobToken);
+        LOGGER.debug("Deleted job with token {}", jobToken);
       } catch (IOException ex) {
         LOGGER.error("Failed to deserialize jobUnit.", ex);
         jedis.hdel(REDIS_DELAYED_JOBS_TIMESTAMP_SET, jobToken);
