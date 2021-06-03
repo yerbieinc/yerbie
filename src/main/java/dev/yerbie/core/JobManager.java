@@ -66,20 +66,26 @@ public class JobManager {
         throw new DuplicateJobException(jobToken);
       }
 
-      Transaction transaction = jedis.multi();
-
       Long timestampEpochSeconds = Instant.now(clock).plusSeconds(delaySeconds).getEpochSecond();
       String timestampBucketName = String.format(DELAYED_ITEMS_LIST, timestampEpochSeconds);
 
       try {
+        String serializedJob =
+            jobSerializer.serializeJob(new JobData(jobPayload, delaySeconds, queue, jobToken, 0));
+
+        if (delaySeconds == 0) {
+          jedis.rpush(String.format(REDIS_READY_JOBS_FORMAT_STRING, queue), serializedJob);
+          LOGGER.info("Job {} moved into queue {} for execution.", jobToken, queue);
+          return jobToken;
+        }
+
+        Transaction transaction = jedis.multi();
+
         transaction.zadd(
             REDIS_DELAYED_JOBS_SORTED_SET,
             Instant.now(clock).plusSeconds(delaySeconds).getEpochSecond(),
             timestampBucketName,
             ZAddParams.zAddParams().nx());
-
-        String serializedJob =
-            jobSerializer.serializeJob(new JobData(jobPayload, delaySeconds, queue, jobToken, 0));
 
         transaction.rpush(timestampBucketName, serializedJob);
 
@@ -91,7 +97,6 @@ public class JobManager {
         transaction.exec();
       } catch (IOException ex) {
         LOGGER.error("Unable to serialize job into jobData.", ex);
-        transaction.discard();
         throw new SerializationException();
       }
 

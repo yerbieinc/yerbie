@@ -42,6 +42,15 @@ public class JobManagerTest {
   }
 
   @Test
+  public void testCreateJobZeroDelay() throws Exception {
+    when(mockJobSerializer.serializeJob(any())).thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
+
+    assertEquals("jobToken", jobManager.createJob(0, "JOB_PAYLOAD", "queue", "jobToken"));
+
+    verify(mockJedis).rpush("ready_jobs_queue", StubData.SAMPLE_JOB_DATA_STRING);
+  }
+
+  @Test
   public void testCreateJob() throws Exception {
     when(mockJobSerializer.serializeJob(any())).thenReturn(StubData.SAMPLE_JOB_DATA_STRING);
     when(mockJobSerializer.serializeJobUnit(any())).thenReturn(StubData.SAMPLE_JOB_UNIT_STRING);

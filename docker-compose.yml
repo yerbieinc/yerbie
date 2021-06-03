@@ -4,8 +4,6 @@ services:
     build: .
     ports:
       - "5865:5865"
-    env_file:
-      - .env
     depends_on:
       - redis
     command: ["--redis-host", "redis", "--redis-port", "6379"]
